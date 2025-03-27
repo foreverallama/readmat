@@ -10,7 +10,7 @@ authors = [{name = "foreverallama", email = "klockatoo@gmail.com"}]
 readme = "README.md"
 requires-python = ">=3.6"
 dependencies = [
-    "scipy==1.16.0",
+    "scipy==1.15.0",
     "numpy==2.2.2",
     "pytz"
 ]

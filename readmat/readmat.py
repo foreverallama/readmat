@@ -3,7 +3,7 @@ from scipy.io import loadmat
 from io import BytesIO
 import struct
 from scipy.io.matlab._mio5 import MatFile5Reader
-from loadmat.src.class_parser import *
+from readmat.class_parser import *
 
 
 class SubsystemReader:
@@ -200,7 +200,8 @@ class SubsystemReader:
             obj = obj_dict
 
         return obj
-    
+
+
 def read_subsystem_data(file_path):
     """Reads subsystem data from file path and returns list of objects by their object IDs"""
     mdict = loadmat(file_path)
