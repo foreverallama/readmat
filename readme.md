@@ -55,11 +55,11 @@ There's still lots to do! I could use your help in the following:
 - Write object data into MAT-files
 - Write tests
 
-I've also opened an (issue)[https://github.com/scipy/scipy/issues/22736] with `scipy.io` and ultimately plan to push all of this over there
+I've also opened an [issue](https://github.com/scipy/scipy/issues/22736) with `scipy.io` and ultimately plan to push all of this over there
 
 # Thanks
 
-Big thanks to (mahalex)[https://github.com/mahalex/MatFileHandler] for their detailed breakdown of MAT-files. Most of this wouldn't be possible without it.
+Big thanks to [mahalex](https://github.com/mahalex/MatFileHandler) for their detailed breakdown of MAT-files. Most of this wouldn't be possible without it.
 
 # TODO:
 - [ ] Update `docs/`
