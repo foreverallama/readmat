@@ -166,9 +166,7 @@ def parse_string(object, field_name, byte_order):
     encoding = "utf-16-le" if byte_order == "<" else "utf-16-be"
     for char_count in char_counts:
         byte_length = char_count * 2  # UTF-16 encoding
-        extracted_string = byte_data[pos : pos + byte_length].decode(
-            encoding
-        )  # Change decoding based on endianness
+        extracted_string = byte_data[pos : pos + byte_length].decode(encoding)
         strings.append(extracted_string)
         pos += byte_length
 
