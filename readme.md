@@ -32,7 +32,7 @@ print(data)
 
 ### MATLAB objects
 
-MATLAB objects like `datetime` and `duration` are implemented using wrapper objects based on Python's `datetime`. `string` is returned as a `numpy.array`. Both the processed data and raw data can be accessed and viewed.
+MATLAB objects like `datetime` and `duration` are implemented using wrapper objects based on Python's `datetime`. `string` is returned as `numpy.array`. Both the processed data and raw data can be accessed and viewed.
 
 ```python
 data_dict = read_subsystem_data(file_path)
@@ -62,7 +62,7 @@ I've also opened an [issue](https://github.com/scipy/scipy/issues/22736) with `s
 Big thanks to [mahalex](https://github.com/mahalex/MatFileHandler) for their detailed breakdown of MAT-files. Most of this wouldn't be possible without it.
 
 # TODO:
-- [ ] Update `docs/`
+- [x] Update `docs/`
 - [ ] Update `scipy.io` to extract variable names from objects
 - [ ] Add tests for `string`, `datetime` and `duration`
 - [ ] Add support for detecting object references
