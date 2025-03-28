@@ -22,7 +22,7 @@ The data within this element is formatted like a MAT-file itself, and contains i
 ├── Data Element: Character Array
 ```
 
-An accompanying [image]() is attached to help understand the subsystem data format better.
+An accompanying [excel sheet](./ss_data_breakdown.xlsx) depicting the subsystem data format is attached to help with understanding.
 
 ## Basic File Header
 
@@ -110,7 +110,7 @@ Cell 2 is always tagged as `miMATRIX` of `0 bytes`. This is most likely used to 
 
 ### Field Content Cells
 
-Field contents are stored from Cell 3 onwards. The data element used to store field contents depend on the class and field types. A breakdown of field content datatypes for some common MATLAB fields can be read [here]()
+Field contents are stored from Cell 3 onwards. The data element used to store field contents depend on the class and field types. A breakdown of field content datatypes for some common MATLAB fields can be read [here](./field_contents.md)
 
 ### Remaining Cells
 
