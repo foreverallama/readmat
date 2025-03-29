@@ -3,25 +3,24 @@ from scipy.io import loadmat
 from io import BytesIO
 import struct
 from scipy.io.matlab._mio5 import MatFile5Reader
+from scipy.io.matlab._mio5_params import OPAQUE_DTYPE
 from readmat.class_parser import *
-
 
 class SubsystemReader:
 
-    def __init__(self, ssdata, byte_order=None, raw_data=False):
+    def __init__(self, ssdata, raw_data=False):
         self.ssdata = ssdata
         self.cell_pos = []
         self.offsets = []
         self.names = []
         self.raw_data = raw_data
-        self.byte_order = byte_order
-        if not byte_order:
-            self.read_byte_order()
+        self.byte_order = self.read_byte_order()
 
     def read_byte_order(self):
         self.ssdata.seek(2)
         data = self.ssdata.read(2)
-        self.byte_order = "<" if data == b"IM" else ">"
+        byte_order = "<" if data == b"IM" else ">"
+        return byte_order
 
     def read_miMATRIX(self, MR):
         """Wrapper function around the get_variables() of the MatFile5Reader class."""
@@ -65,7 +64,7 @@ class SubsystemReader:
             data = self.ssdata.read(4)
             nblocks = struct.unpack(
                 self.byte_order + "I", data
-            )  # first integer gives number of subblocks
+            )[0]  # first integer gives number of subblocks
             nbytes = nblocks * 12  # each subblock is 12 bytes long
             nbytes = nbytes + (nbytes + 4) % 8  # padding to 8 byte boundary
             self.ssdata.seek(nbytes, 1)
@@ -202,7 +201,7 @@ class SubsystemReader:
         return obj
 
 
-def read_subsystem_data(file_path):
+def read_subsystem_data_legacy(file_path, raw_data=False):
     """Reads subsystem data from file path and returns list of objects by their object IDs"""
     mdict = loadmat(file_path)
     data_reference = mdict["None"]
@@ -210,7 +209,27 @@ def read_subsystem_data(file_path):
     object_id = data_reference["arr"][0][4][0]
 
     ssdata = BytesIO(mdict["__function_workspace__"])
-    SR = SubsystemReader(ssdata, raw_data=False)
+    SR = SubsystemReader(ssdata, raw_data)
     obj_dict = SR.parse_subsystem()
     obj_dict[var_name] = obj_dict.pop(object_id)
     return obj_dict
+
+def merge_dicts(mdict, obj_dict):
+    """Merges two dictionaries."""
+    for key, value in mdict.items():
+        if isinstance(value, np.ndarray) and value.dtype == OPAQUE_DTYPE:
+            object_id = value["object_id"].item()
+            if object_id in obj_dict:
+                mdict[key] = obj_dict[object_id]
+
+    return mdict
+
+
+def read_subsystem_data(file_path, raw_data=False):
+    """Reads subsystem data from file path and returns list of objects by their object IDs"""
+    mdict = loadmat(file_path)
+    ssdata = BytesIO(mdict["__function_workspace__"])
+    SR = SubsystemReader(ssdata, raw_data)
+    obj_dict = SR.parse_subsystem()
+    mdict1 = merge_dicts(mdict, obj_dict) # Merge the dictionaries in place
+    return mdict1
