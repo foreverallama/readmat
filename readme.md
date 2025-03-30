@@ -41,7 +41,7 @@ MATLAB objects like `datetime` and `duration` are implemented using wrapper obje
 
 ```python
 data_dict = read_subsystem_data(file_path)
-datetime_value = data['datetime_array_1']['__fields__']
+datetime_value = data['myVarName']['__fields__']
 
 dt = datetime_value[0] # Returns a datetime object
 print(datetime_value) # Prints datetime in readable format
@@ -57,7 +57,7 @@ A more detailed explanation of the MAT-file structure can be found [here](./docs
 
 There's still lots to do! I could use your help in the following:
 
-- Reverse Enginner the MAT-file structure to include support for more objects like `timetable`, `categorical`, `calendarDuration` and others
+- Reverse engineer the MAT-file structure to include support for more objects like `timetable`, `categorical`, `calendarDuration` and others
 - Write object data into MAT-files
 - Write tests
 - Algorithmic optimization to integrate within the `scipy.io` framework
@@ -74,7 +74,7 @@ Big thanks to [mahalex](https://github.com/mahalex/MatFileHandler) for their det
 - [x] Add support for detecting object references
 - [x] Update `scipy.io` to extract variable names from objects
 - [x] Added support for MATLAB `table` as raw data
-- [ ] Add `scipy` fork as a submodule
+- [x] Add `scipy` fork as a submodule
 - [ ] Wrap MATLAB `table` within a Pandas DataFrame
 - [ ] Update `scipy.io` to include object reference checks inside `read_real_complex()` 
 - [ ] Add tests for `string`, `datetime`, `duration` and `table`
