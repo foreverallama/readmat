@@ -8,8 +8,6 @@ Currently, it is a wrapper around `scipy.io` to extract field contents from an o
 - `duration`
 - User-defined objects
 
-**Note**: `scipy.io.loadmat` is only able to return the last object variable in a MAT-file. Hence, currently this supports reading MAT-files with only one object
-
 ## Usage
 
 Clone and install using pip:
@@ -26,9 +24,12 @@ To read subsystem data from a `.mat` file:
 from readmat import read_subsystem_data
 
 file_path = "path/to/your/file.mat"
-data = read_subsystem_data(file_path)
+data = read_subsystem_data_(file_path)
 print(data)
 ```
+**Note**: Those working with the official `scipy` release can use `read_subsystem_legacy()`. This works as `scipy.io.loadmat` only returns the last object variable in a MAT-file. This is because `loadmat` is not able to detect the array name, replacing it with a placeholder `None` which gets overwritten for each object read from file.
+
+I am using a locally modified version of `scipy.io.matlab` to extract objects from a MAT-file. I will be adding this as a submodule soon, which allows the proper use of `read_subsystem_data()`.
 
 ### MATLAB objects
 
@@ -64,8 +65,9 @@ Big thanks to [mahalex](https://github.com/mahalex/MatFileHandler) for their det
 # TODO:
 
 - [x] Update `docs/`
-- [x] Update `scipy.io` to extract variable names from objects
 - [x] Add support for detecting object references
+- [x] Update `scipy.io` to extract variable names from objects
+- [ ] Add `scipy` fork as a submodule
 - [ ] Add tests for `string`, `datetime` and `duration`
 - [ ] Add support for MATLAB `table` and `timetable`
 - [ ] Add support for display formatting for `datetime` and `duration`
