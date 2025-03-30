@@ -6,6 +6,7 @@ from scipy.io.matlab._mio5 import MatFile5Reader
 from scipy.io.matlab._mio5_params import OPAQUE_DTYPE
 from readmat.class_parser import *
 
+
 class SubsystemReader:
 
     def __init__(self, ssdata, raw_data=False):
@@ -13,6 +14,7 @@ class SubsystemReader:
         self.cell_pos = []
         self.offsets = []
         self.names = []
+        self.unique_objects = []
         self.raw_data = raw_data
         self.byte_order = self.read_byte_order()
 
@@ -42,29 +44,59 @@ class SubsystemReader:
         byte_stream = BytesIO(mat_data)
         MR = MatFile5Reader(byte_stream)
         res = self.read_miMATRIX(MR)
-
         return res
 
-    def extract_data(self, object):
+    def check_object_reference(self, res):
+        """Checks if the field content is an object reference"""
+        if not isinstance(res, np.ndarray):
+            return False
+
+        if res.dtype != np.uint32:
+            return False
+
+        if res.shape[0] < 6:
+            return False
+
+        ref_value = res[0, 0]
+        ndims = res[1, 0]
+        shapes = res[2 : 2 + ndims, 0]
+
+        if ref_value != 0xDD000000:
+            return False
+
+        if ndims <= 1 or len(shapes) != ndims:
+            return False
+
+        # * Need to study condition with more examples
+        if np.count_nonzero(shapes != 1) > 1:  # At most 1 dimension can have size > 1
+            return False
+
+        return True
+
+    def extract_data(self, object_id, class_names, processed_ids):
         """Extract field contents for each object"""
+
+        class_id, type1_id, type2_id = self.unique_objects[object_id - 1]
 
         # Metadata for Type 1 objects are stored in offsets[1]
         # Type 2 objects in offsets[3]
-        if object["type1_id"] != 0 and object["type2_id"] == 0:
+        if type1_id != 0 and type2_id == 0:
             self.ssdata.seek(self.offsets[1])
-            obj_dep_id = object["type1_id"]
-        elif object["type1_id"] == 0 and object["type2_id"] != 0:
+            obj_dep_id = type1_id
+        elif type1_id == 0 and type2_id != 0:
             self.ssdata.seek(self.offsets[3])
-            obj_dep_id = object["type2_id"]
+            obj_dep_id = type2_id
+        else:
+            obj_dep_id = 0  # No flag
 
         self.ssdata.seek(8, 1)  # Discard first 8 bytes
         # Metadata is ordered by object ID
         # Find the correct metadata block for object ID
         while obj_dep_id - 1 > 0:
             data = self.ssdata.read(4)
-            nblocks = struct.unpack(
-                self.byte_order + "I", data
-            )[0]  # first integer gives number of subblocks
+            nblocks = struct.unpack(self.byte_order + "I", data)[
+                0
+            ]  # first integer gives number of subblocks
             nbytes = nblocks * 12  # each subblock is 12 bytes long
             nbytes = nbytes + (nbytes + 4) % 8  # padding to 8 byte boundary
             self.ssdata.seek(nbytes, 1)
@@ -73,6 +105,7 @@ class SubsystemReader:
         # Read field contents for the given object ID
         data = self.ssdata.read(4)
         nfields = struct.unpack(self.byte_order + "I", data)[0]
+        object = {"__class_name__": class_names[class_id - 1]}
         obj_dict = {}
         while nfields > 0:
             # Extract field name
@@ -93,14 +126,24 @@ class SubsystemReader:
             mat_data = self.ssdata.read(nbytes + 8)  # Read the full cell content
             obj_dict[field_name] = self.read_mat_data(mat_data)
 
+            if self.check_object_reference(obj_dict[field_name]):
+                # If the field content is an object reference, extract the data
+                object_sub_id = obj_dict[field_name][-2, 0].item()
+                obj_dict[field_name] = self.extract_data(
+                    object_sub_id, class_names, processed_ids
+                )
+                processed_ids.append(object_sub_id)
+
             # Move to next field
             self.ssdata.seek(curPos)
             nfields -= 1
 
-        mat_obj = obj_dict
+        object["__fields__"] = obj_dict
+
         # Wraps object in classes based on Matlab Class
+        mat_obj = object
         if not self.raw_data:
-            mat_obj = self.convert_to_object(obj_dict, object["__class_name__"])
+            mat_obj = self.convert_to_object(object)
 
         return mat_obj
 
@@ -151,46 +194,45 @@ class SubsystemReader:
             class_names.append(self.names[class_index - 1])
 
         # Connecting class_ids to object_ids
-        objects = {}
         self.ssdata.seek(self.offsets[2])
         self.ssdata.seek(24, 1)  # Discard first val
+
         while self.ssdata.tell() < self.offsets[3]:
             data = self.ssdata.read(24)
-            class_id, _, _, type1_id, type2_id, object_id = struct.unpack(
+            class_id, _, _, type1_id, type2_id, _ = struct.unpack(
                 self.byte_order + "6I", data
             )
-            objects[object_id] = {
-                "class_id": class_id,
-                "__class_name__": class_names[class_id - 1],
-                "type1_id": type1_id,
-                "type2_id": type2_id,
-            }
+            self.unique_objects.append((class_id, type1_id, type2_id))
 
         # Extract Data from Fields:
-        for object in objects.keys():
-            res = self.extract_data(objects[object])
-            objects[object]["__fields__"] = res
+        processed_ids = []
+        objects = {}
+        for object_id in range(1, len(self.unique_objects) + 1):
+            if object_id in processed_ids:
+                continue
 
-        # Delete metadata
-        for object in objects.keys():
-            del objects[object]["class_id"]
-            del objects[object]["type1_id"]
-            del objects[object]["type2_id"]
+            res = self.extract_data(object_id, class_names, processed_ids)
+            objects[object_id] = res
+            processed_ids.append(object_id)
 
         return objects
 
-    def convert_to_object(self, obj_dict, class_name):
+    def convert_to_object(self, obj_dict):
         """Converts the dictionary to a specific object based on the class name."""
+
+        class_name = obj_dict["__class_name__"]
+        fields = obj_dict["__fields__"]
+
         if class_name == "datetime":
-            obj = MatDateTime(obj_dict)
+            obj = MatDateTime(fields)
 
         elif class_name == "duration":
-            obj = MatDuration(obj_dict)
+            obj = MatDuration(fields)
 
         elif class_name == "string":
             obj = parse_string(
-                obj_dict,
-                "any" if "any" in obj_dict else None,
+                fields,
+                "any" if "any" in fields else None,
                 byte_order=self.byte_order,
             )
 
@@ -214,10 +256,13 @@ def read_subsystem_data_legacy(file_path, raw_data=False):
     obj_dict[var_name] = obj_dict.pop(object_id)
     return obj_dict
 
+
 def merge_dicts(mdict, obj_dict):
     """Merges two dictionaries."""
     for key, value in mdict.items():
-        if isinstance(value, np.ndarray) and value.dtype == OPAQUE_DTYPE:
+        if not isinstance(value, np.ndarray):
+            continue
+        if value.dtype == OPAQUE_DTYPE:
             object_id = value["object_id"].item()
             if object_id in obj_dict:
                 mdict[key] = obj_dict[object_id]
@@ -231,5 +276,5 @@ def read_subsystem_data(file_path, raw_data=False):
     ssdata = BytesIO(mdict["__function_workspace__"])
     SR = SubsystemReader(ssdata, raw_data)
     obj_dict = SR.parse_subsystem()
-    mdict1 = merge_dicts(mdict, obj_dict) # Merge the dictionaries in place
+    mdict1 = merge_dicts(mdict, obj_dict)  # Merge the dictionaries in place
     return mdict1

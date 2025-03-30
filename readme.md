@@ -62,8 +62,10 @@ I've also opened an [issue](https://github.com/scipy/scipy/issues/22736) with `s
 Big thanks to [mahalex](https://github.com/mahalex/MatFileHandler) for their detailed breakdown of MAT-files. Most of this wouldn't be possible without it.
 
 # TODO:
+
 - [x] Update `docs/`
-- [ ] Update `scipy.io` to extract variable names from objects
+- [x] Update `scipy.io` to extract variable names from objects
+- [x] Add support for detecting object references
 - [ ] Add tests for `string`, `datetime` and `duration`
-- [ ] Add support for detecting object references
+- [ ] Add support for MATLAB `table` and `timetable`
 - [ ] Add support for display formatting for `datetime` and `duration`
