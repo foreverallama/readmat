@@ -16,6 +16,8 @@ class SubsystemReader:
         self.names = []
         self.unique_objects = []
         self.raw_data = raw_data
+        self.class_names = []
+        self.processed_ids = []
         self.byte_order = self.read_byte_order()
 
     def read_byte_order(self):
@@ -37,8 +39,37 @@ class SubsystemReader:
                 err = f"Read error: {e}"
                 print(err)
 
-        return res
+            res = self.process_res_array(res)
 
+        return res
+    
+    def process_res_array(self, arr):
+        """Iteratively check if result is an object reference and extract data"""
+        
+        # Implemented considering deeply nested arrays like Cells, Structs in MATLAB
+        # If the object reference is within a cell or struct field, this will process it
+        
+        # Very hacky workaround to detect object references - needs to be improved
+        # Best case scenario is to update scipy.io to detect this when reading integer arrays
+        if not isinstance(arr, np.ndarray):
+            return arr
+        
+        if arr.dtype == np.dtype('object'):
+            result = np.empty_like(arr)
+            
+            for i, item in enumerate(arr.flat):
+                idx = np.unravel_index(i, arr.shape)
+                result[idx] = self.process_res_array(item)
+            
+            return result
+        else:
+            if self.check_object_reference(arr):
+                object_id = arr[-2, 0].item()
+                self.processed_ids.append(object_id)
+                return self.extract_data(object_id)
+            
+        return arr
+        
     def read_mat_data(self, mat_data):
         """Read the data from the mat file."""
         byte_stream = BytesIO(mat_data)
@@ -73,7 +104,7 @@ class SubsystemReader:
 
         return True
 
-    def extract_data(self, object_id, class_names, processed_ids):
+    def extract_data(self, object_id):
         """Extract field contents for each object"""
 
         class_id, type1_id, type2_id = self.unique_objects[object_id - 1]
@@ -105,7 +136,7 @@ class SubsystemReader:
         # Read field contents for the given object ID
         data = self.ssdata.read(4)
         nfields = struct.unpack(self.byte_order + "I", data)[0]
-        object = {"__class_name__": class_names[class_id - 1]}
+        object = {"__class_name__": self.class_names[class_id - 1]}
         obj_dict = {}
         while nfields > 0:
             # Extract field name
@@ -125,14 +156,6 @@ class SubsystemReader:
             self.ssdata.seek(-8, 1)
             mat_data = self.ssdata.read(nbytes + 8)  # Read the full cell content
             obj_dict[field_name] = self.read_mat_data(mat_data)
-
-            if self.check_object_reference(obj_dict[field_name]):
-                # If the field content is an object reference, extract the data
-                object_sub_id = obj_dict[field_name][-2, 0].item()
-                obj_dict[field_name] = self.extract_data(
-                    object_sub_id, class_names, processed_ids
-                )
-                processed_ids.append(object_sub_id)
 
             # Move to next field
             self.ssdata.seek(curPos)
@@ -185,13 +208,12 @@ class SubsystemReader:
         self.names = [s.decode("utf-8") for s in data.split(b"\x00") if s]
 
         # Extracting the class names
-        class_names = []
         self.ssdata.seek(self.offsets[0])
         self.ssdata.seek(16, 1)  # Discard first val
         while self.ssdata.tell() < self.offsets[1]:
             data = self.ssdata.read(16)
             _, class_index, _, _ = struct.unpack(self.byte_order + "4I", data)
-            class_names.append(self.names[class_index - 1])
+            self.class_names.append(self.names[class_index - 1])
 
         # Connecting class_ids to object_ids
         self.ssdata.seek(self.offsets[2])
@@ -205,15 +227,14 @@ class SubsystemReader:
             self.unique_objects.append((class_id, type1_id, type2_id))
 
         # Extract Data from Fields:
-        processed_ids = []
         objects = {}
         for object_id in range(1, len(self.unique_objects) + 1):
-            if object_id in processed_ids:
+            if object_id in self.processed_ids:
                 continue
 
-            res = self.extract_data(object_id, class_names, processed_ids)
+            res = self.extract_data(object_id)
             objects[object_id] = res
-            processed_ids.append(object_id)
+            self.processed_ids.append(object_id)
 
         return objects
 
