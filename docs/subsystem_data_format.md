@@ -4,7 +4,7 @@ If you remember, the MAT-file header contains a field called `Subsystem Offset`.
 
 The data within this element is formatted like a MAT-file itself, and contains information about all objects stored in the MAT-file, along with their contents. It has the following structure:
 
-```
+```text
 ├──Basic File Header
 ├── Data Element: mxSTRUCT_CLASS
 │   ├── Field "MCOS": Cell Array
@@ -35,6 +35,7 @@ The first data element is of `mxSTRUCT_CLASS`, which has a single field called `
 ### Data Subelement: mxOPAQUE_CLASS
 
 This subelement is quite similar to the data element that appears in the normal part of the MAT-file, but with some key differences:
+
 - The subelement does not have an array name
 - The subelement is of class type `FileWrapper__`
 - The object metadata is **not** a `mxUINT32` array, but instead a `mxCELL_CLASS` array
@@ -114,12 +115,14 @@ Field contents are stored from Cell 3 onwards. The data element used to store fi
 
 ### Remaining Cells
 
-There are always three more cells at the end of the array, which appear after all the field content cells. The purpose of these cells are unknown. They are typically empty cells, but might contain some kind of metadata for MATLAB datatypes.
+There are always three more cells at the end of the array, which appear after all the field content cells. The purpose of these cells is partially unknown. It is highly likely that these contain some kind of metadata for user-defined objects, which needs to be studied further. 
+
+For MATLAB datatypes implemented as classes, such as `datetime`, `table`, and `string`, they are typically empty cells, except for one. The very last cell of this cell array contains a list of all properties with the default values they are initialized with. The contents of this cell is another cell array itself. The last cell within this array contains a `struct` whose fields are the property names and field contents are the default property values.
 
 ## Data Element 2: Character Array
 
-Finally, the last part of the subsystem data contains another data element which is stored as a `mxUINT8` character array. However, the contents of this array is again structured like a mini-MAT file like the subsystem data itself. 
+Finally, the last part of the subsystem data contains another data element which is stored as a `mxUINT8` character array. However, the contents of this array is again structured like a mini-MAT file like the subsystem data itself.
 
-The data within this element contains a 4 byte header indicating MAT-file version and Endianness, and a single data element of `mxSTRUCT` type. This data element contains a single field `MCOS`. However, the contents of this field are empty. 
+The data within this element contains a 4 byte header indicating MAT-file version and Endianness, and a single data element of `mxSTRUCT` type. This data element contains a single field `MCOS`. However, the contents of this field are empty.
 
 My guess is MATLAB is using some kind of recursive function to write the subsystem data, popping out objects from a buffer as they are written, resulting in this empty data element at the end.
