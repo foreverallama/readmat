@@ -62,21 +62,15 @@ There's still lots to do! I could use your help in the following:
 - Write tests
 - Algorithmic optimization to integrate within the `scipy.io` framework
 
-I've also opened an [issue](https://github.com/scipy/scipy/issues/22736) with `scipy.io` detailing some of the workflow, as well as a [PR](https://github.com/scipy/scipy/pull/22762) to develop this iteratively.
+I've also opened an [issue](https://github.com/scipy/scipy/issues/22736) with `scipy.io` detailing some of the workflow, as well as a [PR](https://github.com/scipy/scipy/pull/22762) to develop this iteratively. Please feel free to contribute there as well!
 
-# Thanks
+# Acknowledgement
 
 Big thanks to [mahalex](https://github.com/mahalex/MatFileHandler) for their detailed breakdown of MAT-files. Most of this wouldn't be possible without it.
 
 # TODO:
 
 - [x] Update `docs/`
-- [x] Add support for detecting object references
 - [x] Update `scipy.io` to extract variable names from objects
-- [x] Added support for MATLAB `table` as raw data
-- [x] Add `scipy` fork as a submodule
-- [ ] Wrap MATLAB `table` within a Pandas DataFrame
 - [ ] Update `scipy.io` to include object reference checks inside `read_real_complex()` 
-- [ ] Add tests for `string`, `datetime`, `duration` and `table`
-- [ ] Add support for MATLAB `timetable`
-- [ ] Add support for display formatting for `datetime` and `duration`
+- [ ] Add tests for each class type
