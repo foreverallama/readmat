@@ -1,3 +1,0 @@
-[submodule "scipy"]
-	path = scipy
-	url = https://github.com/foreverallama/scipy.git
