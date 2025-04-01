@@ -1,30 +1,34 @@
 import os
 from io import BytesIO
 import struct
-# from scipy.io.matlab._mio5 import MatFile5Reader
+from scipy.io.matlab._mio5 import MatFile5Reader
+
 # from scipy.io.matlab._mio5_params import OPAQUE_DTYPE
 from readmat.class_parser import *
 
+
 class SubsystemReaderNew:
-    def __init__(self, ssdata):
+    def __init__(self, ssdata, raw_data=False):
         self.ssdata = ssdata
-        self.cell_pos = []
+        self._cell_pos = []
         self.names = []
         self.class_names = []
-        self.unique_objects = []
-        self.byte_order = self.read_byte_order()
+        self._unique_objects = []
+        self._offsets = []
+        self.raw_data = raw_data
+        self.byte_order = self._read_byte_order()
 
-        self.initialize_subsystem()
+        self._initialize_subsystem()
 
-    def read_byte_order(self):
+    def _read_byte_order(self):
         """Reads subsystem byte order"""
 
         self.ssdata.seek(2)
         data = self.ssdata.read(2)
         byte_order = "<" if data == b"IM" else ">"
         return byte_order
-    
-    def read_field_content_ids(self):
+
+    def _read_field_content_ids(self):
         """Gets field content byte markers"""
 
         data = self.ssdata.read(8)
@@ -32,22 +36,24 @@ class SubsystemReaderNew:
         endPos = self.ssdata.tell() + nbytes
 
         self.ssdata.seek(40, 1)
-        self.cell_pos.append(self.ssdata.tell())
+        self._cell_pos.append(self.ssdata.tell())
         while self.ssdata.tell() < endPos:
             data = self.ssdata.read(8)
             _, nbytes = struct.unpack(self.byte_order + "II", data)
-            self.cell_pos.append(self.ssdata.tell() + nbytes) # This is ordered by field_content_id
+            self._cell_pos.append(
+                self.ssdata.tell() + nbytes
+            )  # This is ordered by field_content_id
             self.ssdata.seek(nbytes, 1)
 
-    def read_names_len(self):
+    def _read_names_len(self):
         """Gets the length of the names"""
 
         data = self.ssdata.read(8)
         _, fc_len = struct.unpack(self.byte_order + "II", data)
-        
+
         return fc_len
-    
-    def read_region_offsets(self, cell1_start):
+
+    def _read_region_offsets(self, cell1_start):
         """Gets byte markers for region offsets"""
 
         data = self.ssdata.read(32)
@@ -55,8 +61,8 @@ class SubsystemReaderNew:
         offsets = [offset + cell1_start for offset in offsets]
 
         return offsets
-    
-    def read_class_names(self, fc_len, regionStart, regionEnd):
+
+    def _read_class_names(self, fc_len, regionStart, regionEnd):
         """Parses Region 1"""
 
         # Get table of contents
@@ -70,9 +76,11 @@ class SubsystemReaderNew:
         while self.ssdata.tell() < regionEnd:
             data = self.ssdata.read(16)
             _, class_index, _, _ = struct.unpack(self.byte_order + "4I", data)
-            self.class_names.append(self.names[class_index - 1]) # This list is ordered by class_id
+            self.class_names.append(
+                self.names[class_index - 1]
+            )  # This list is ordered by class_id
 
-    def read_object_types(self, regionStart, regionEnd):
+    def _read_object_types(self, regionStart, regionEnd):
         """Parses Region 3"""
 
         self.ssdata.seek(regionStart)
@@ -83,30 +91,249 @@ class SubsystemReaderNew:
             class_id, _, _, type1_id, type2_id, dep_id = struct.unpack(
                 self.byte_order + "6I", data
             )
-            self.unique_objects.append((class_id, type1_id, type2_id, dep_id)) # This list is ordered by object_id
+            self._unique_objects.append(
+                (class_id, type1_id, type2_id, dep_id)
+            )  # This list is ordered by object_id
 
-    def initialize_subsystem(self):
+    def _initialize_subsystem(self):
         """parses the subsystem data and and creates a link"""
         self.ssdata.seek(144)  # discard headers
 
-        self.read_field_content_ids()
+        self._read_field_content_ids()
 
         # Parsing Cell 1
-        self.ssdata.seek(self.cell_pos[0])
+        self.ssdata.seek(self._cell_pos[0])
         self.ssdata.seek(8, 1)  # Discard miMATRIX Header
         self.ssdata.seek(48, 1)  # Discard Variable Header
 
         # Extracting metadata offset byte markers
         cell1_start = self.ssdata.tell()
-        fc_len = self.read_names_len()
-        offsets = self.read_region_offsets(cell1_start)
+        fc_len = self._read_names_len()
+        self._offsets = self._read_region_offsets(cell1_start)
 
-        self.read_class_names(fc_len, regionStart=offsets[0], regionEnd=offsets[1])
-        self.read_object_types(regionStart=offsets[2], regionEnd=offsets[3])
+        self._read_class_names(
+            fc_len, regionStart=self._offsets[0], regionEnd=self._offsets[1]
+        )
+        self._read_object_types(
+            regionStart=self._offsets[2], regionEnd=self._offsets[3]
+        )
 
-        return 
-    
+        return
+
     def get_object_dependencies(self, object_id):
         """Get the object dependencies for a given object ID"""
-        
-        return self.unique_objects[object_id - 1]
+
+        return self._unique_objects[object_id - 1]
+
+    def get_class_name(self, class_id):
+        """Get the class name for a given class ID"""
+
+        return self.class_names[class_id - 1]
+
+    def check_object_reference(self, res):
+        """Checks if the field content is a reference to another object"""
+        if not isinstance(res, np.ndarray):
+            return False
+
+        if res.dtype != np.uint32:
+            return False
+
+        if res.shape[0] < 6:
+            return False
+
+        ref_value = res[0, 0]
+        ndims = res[1, 0]
+        shapes = res[2 : 2 + ndims, 0]
+
+        if ref_value != 0xDD000000:
+            return False
+
+        if ndims <= 1 or len(shapes) != ndims:
+            return False
+
+        # * Need to study condition with more examples
+        if np.count_nonzero(shapes != 1) > 1:  # At most 1 dimension can have size > 1
+            return False
+
+        return True
+
+    def process_res_array(self, arr):
+        """Iteratively check if result is an object reference and extract data"""
+
+        # Implemented considering deeply nested arrays like Cells, Structs in MATLAB
+        # If the object reference is within a cell or struct field, this will process it
+
+        # Very hacky workaround to detect object references - needs to be improved
+        # Best case scenario is to update scipy.io to detect this when reading integer arrays
+        if not isinstance(arr, np.ndarray):
+            return arr
+
+        if arr.dtype == np.dtype("object"):
+            result = np.empty_like(arr)
+
+            for i, item in enumerate(arr.flat):
+                idx = np.unravel_index(i, arr.shape)
+                result[idx] = self.process_res_array(item)
+
+            return result
+        else:
+            if self.check_object_reference(arr):
+                object_id = arr[-2, 0].item()
+                ndims = arr[1, 0].item()
+                dims = arr[2 : 2 + ndims, 0]
+                return self.read_object_arrays(object_id, dims)
+
+        return arr
+
+    def read_miMATRIX(self, MR):
+        """Wrapper function around the get_variables() of scipy.io.matlab MatFile5Reader class."""
+        MR.byte_order = self.byte_order
+        MR.mat_stream.seek(0)
+        MR.initialize_read()
+        while not MR.end_of_stream():
+            hdr, _ = MR.read_var_header()
+            try:
+                res = MR.read_var_array(hdr, process=True)
+            except Exception as e:
+                err = f"Read error: {e}"
+                print(err)
+
+            res = self.process_res_array(res)
+
+        return res
+
+    def read_mat_data(self, mat_data):
+        """Read the data from the mat file. Wrapper around scipy.io.matlab MatFile5Reader class."""
+        byte_stream = BytesIO(mat_data)
+        MR = MatFile5Reader(byte_stream)
+        res = self.read_miMATRIX(MR)
+        return res
+
+    def get_num_fields(self, type1_id, type2_id):
+        """Extract the number of fields for the object"""
+
+        # Metadata for Type 1 objects are stored in offsets[1]
+        # Type 2 objects in offsets[3]
+        if type1_id != 0 and type2_id == 0:
+            self.ssdata.seek(self._offsets[1])
+            obj_type_id = type1_id
+        elif type1_id == 0 and type2_id != 0:
+            self.ssdata.seek(self._offsets[3])
+            obj_type_id = type2_id
+        else:
+            obj_type_id = 0  # No flag
+
+        if obj_type_id == 0:
+            return None
+
+        self.ssdata.seek(8, 1)  # Discard first 8 bytes
+        # Metadata is ordered by object type ID
+        # Find the correct metadata block for object type ID
+
+        while obj_type_id - 1 > 0:
+            # first integer gives number of subblocks
+            data = self.ssdata.read(4)
+            nblocks = struct.unpack(self.byte_order + "I", data)[0]
+
+            # each subblock is 12 bytes long
+            nbytes = nblocks * 12
+            nbytes = nbytes + (nbytes + 4) % 8  # padding to 8 byte boundary
+            self.ssdata.seek(nbytes, 1)
+            obj_type_id -= 1
+
+        data = self.ssdata.read(4)  # Read nfields
+        nfields = struct.unpack(self.byte_order + "I", data)[0]
+
+        return nfields
+
+    def extract_from_field(self, nfields):
+        """Extracts contents of each field of an object"""
+        obj_fields = {}
+        while nfields > 0:
+            # Extract field name
+            data = self.ssdata.read(12)
+            field_index, _, field_content_index = struct.unpack(
+                self.byte_order + "3I", data
+            )
+            field_name = self.names[field_index - 1]
+            curPos = self.ssdata.tell()
+
+            # Extract contents from field name
+            self.ssdata.seek(
+                self._cell_pos[field_content_index + 2]
+            )  # adding two since array includes Cell 1 and Cell 2
+            data = self.ssdata.read(8)
+            _, nbytes = struct.unpack(self.byte_order + "II", data)
+            self.ssdata.seek(-8, 1)
+            mat_data = self.ssdata.read(nbytes + 8)  # Read the full cell contents
+            obj_fields[field_name] = self.read_mat_data(mat_data)
+
+            # Move to next field
+            self.ssdata.seek(curPos)
+            nfields -= 1
+
+        return obj_fields
+
+    def convert_to_object(self, fields, class_name):
+        """Converts the object to a Python compatible object"""
+
+        if class_name == "datetime":
+            obj = MatDateTime(fields)
+
+        elif class_name == "duration":
+            obj = MatDuration(fields)
+
+        elif class_name == "string":
+            obj = parse_string(
+                fields,
+                "any" if "any" in fields else None,
+                byte_order=self.byte_order,
+            )
+
+        else:
+            print("Class not supported yet")
+            obj = fields
+
+        return obj
+
+    def extract_fields(self, class_id, type1_id, type2_id):
+        """Extracts the fields from the object"""
+        nfields = self.get_num_fields(type1_id, type2_id)
+        obj_fields = self.extract_from_field(nfields)
+        class_name = self.get_class_name(class_id)
+
+        fields = obj_fields
+        if not self.raw_data:
+            fields = self.convert_to_object(obj_fields, class_name)
+
+        return fields, class_name
+
+    def read_nested_objects(self, object_id, ndeps):
+        """Reads nested objects for a given object
+        For e.g. if the property of an object is another object"""
+        class_id, type1_id, type2_id, _ = self.get_object_dependencies(object_id)
+        obj, class_name = self.extract_fields(class_id, type1_id, type2_id)
+
+        if ndeps > 0:
+            obj = self.read_nested_objects(
+                object_id=object_id + 1, ndeps=ndeps - 1
+            )  # Recursively extract the object
+
+        res = {"__class_name__": class_name, "__fields__": obj}
+
+        return res
+
+    def read_object_arrays(self, object_id, dims):
+        """Reads an object array for a given variable"""
+        obj_array = []
+        total_objects_in_array = np.prod(np.array(dims))
+
+        for i in range(object_id - total_objects_in_array + 1, object_id + 1):
+            _, _, _, dep_id = self.get_object_dependencies(object_id)
+            ndeps = dep_id - object_id
+            res = self.read_nested_objects(object_id=i, ndeps=ndeps)
+            obj_array.append(res)
+            i = i + ndeps
+
+        obj_array = np.reshape(obj_array, dims)
+        return obj_array
