@@ -5,7 +5,7 @@ import struct
 from scipy.io.matlab._mio5 import MatFile5Reader
 from scipy.io.matlab._mio5_params import OPAQUE_DTYPE
 from readmat.class_parser import *
-
+from readmat.subsystem_parser import SubsystemReaderNew
 
 class SubsystemReader:
 
@@ -262,6 +262,62 @@ class SubsystemReader:
             obj = obj_dict
 
         return obj
+    
+def extract_fields(object_id, class_id, type1_id, type2_id, subsystem):
+    return {'placeholder': 'data'}, "test_class"  # Placeholder for actual extraction logic
+
+def read_nested_objects(object_id, ndeps, subsystem):
+
+    class_id, type1_id, type2_id, _ = subsystem.get_object_dependencies(object_id)
+    obj, class_name = extract_fields(object_id, class_id, type1_id, type2_id, subsystem)
+    
+    if ndeps > 0:
+        obj = read_nested_objects(object_id=object_id+1, ndeps=ndeps-1, subsystem=subsystem)
+    
+    res = {
+        "__class_name__": class_name,
+        "__fields__": obj
+    }
+
+    return res
+
+def load_from_mat(file_path, raw_data=False):
+    """Reads data from file path and returns all data"""
+
+    mdict = loadmat(file_path)
+    ssdata = BytesIO(mdict["__function_workspace__"])
+    SR = SubsystemReaderNew(ssdata)
+
+    for var, data in mdict.items():
+        if not isinstance(data, np.ndarray):
+            continue
+        
+        if data.dtype != OPAQUE_DTYPE:
+            continue
+        
+        object_id = data["object_id"].item()
+        ndims = data["n_dims"].item()
+        dims = data["dims"].item()
+        total_objects_in_array = np.prod(np.array(dims))
+        # class_id = data["class_id"].item()
+
+        if ndims == 0:
+            continue
+        
+        # Read all objects in array
+        obj_array = []
+        for i in range(object_id - total_objects_in_array + 1, object_id + 1):
+            _, _, _, dep_id = SR.get_object_dependencies(object_id)
+            ndeps = dep_id - object_id
+            res = read_nested_objects(object_id=i, ndeps=ndeps, subsystem=SR)
+            obj_array.append(res)
+            i = i + ndeps
+
+        obj_array = np.reshape(obj_array, dims)
+        mdict[var] = obj_array
+        
+    return mdict
+                
 
 
 def read_subsystem_data_legacy(file_path, raw_data=False):
@@ -295,7 +351,9 @@ def read_subsystem_data(file_path, raw_data=False):
     """Reads subsystem data from file path and returns list of objects by their object IDs"""
     mdict = loadmat(file_path)
     ssdata = BytesIO(mdict["__function_workspace__"])
-    SR = SubsystemReader(ssdata, raw_data)
+    SR = SubsystemReaderNew(ssdata)
+
+
     obj_dict = SR.parse_subsystem()
     mdict1 = merge_dicts(mdict, obj_dict)  # Merge the dictionaries in place
     return mdict1
