@@ -292,7 +292,7 @@ class SubsystemReader:
             )
 
         else:
-            print("Class not supported yet")
+            # For all other classes, return raw data
             obj = fields
 
         return obj

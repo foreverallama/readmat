@@ -1,10 +1,10 @@
 # ReadMat Module
 
-The `readmat` module provides tools for reading and parsing `.mat` files, particularly for extracting contents from user-defined objects or MATLAB datatypes such as `datetime`, `table` and `string`. It uses a wrapper built around `scipy.io` to extract raw subsystem data from MAT-files, which is then parsed and interpreted to extract object data. It includes utilities for reading MATLAB objects like `datetime` and `duration` both as raw data or their respective Python objects. 
+The `readmat` module provides tools for reading and parsing `.mat` files, particularly for extracting contents from user-defined objects or MATLAB datatypes such as `datetime`, `table` and `string`. It uses a wrapper built around `scipy.io` to extract raw subsystem data from MAT-files, which is then parsed and interpreted to extract object data. It includes utilities for reading MATLAB objects like `datetime` and `duration` both as raw data or their respective Python objects.
 
  Currently supported MATLAB objects are:
 
-- `string` 
+- `string`
 - `datetime`
 - `duration`
 - `table`
@@ -24,23 +24,23 @@ pip install .
 To read subsystem data from a `.mat` file:
 
 ```python
-from readmat import read_subsystem_data
+from readmat import load_from_mat
 
 file_path = "path/to/your/file.mat"
-data = read_subsystem_data_(file_path)
+data = load_from_mat(file_path)
 print(data)
 ```
 
 **Note**: Those working with the official `scipy` release can use `read_subsystem_legacy()`. This works as `scipy.io.loadmat` only returns the last object variable in a MAT-file. This is because `loadmat` is not able to detect the array name, replacing it with a placeholder `None` which gets overwritten for each object read from file.
 
-`read_subsystem_data()` uses a modified fork of `scipy`, which I've included as a submodule. The fork currently contains changes to `scipy.io` to return variable names for all objects in a MAT-file. I'm looking to integrate a large part of this code base with `scipy.io` over the next couple of weeks.
+`load_from_mat()` uses a modified fork of `scipy`. The fork currently contains a few minor changes to `scipy.io` to return variable names and object metadata for all objects in a MAT-file. This change is available [on git](https://github.com/foreverallama/scipy/tree/readmat-scipy) and can be installed directly from the branch. You can also view the changes under `patches/scipy_changes.patch` and apply it manually. Note that you might need to rebuild as parts of the Cython code was modified.
 
 ### MATLAB objects
 
 MATLAB objects like `datetime` and `duration` are implemented using wrapper objects based on Python's `datetime`. `string` is returned as `numpy.array`. Both the processed data and raw data can be accessed and viewed.
 
 ```python
-data_dict = read_subsystem_data(file_path)
+data_dict = load_from_mat(file_path)
 datetime_value = data['myVarName']['__fields__']
 
 dt = datetime_value[0] # Returns a datetime object
