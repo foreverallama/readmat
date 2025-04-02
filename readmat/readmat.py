@@ -1,12 +1,14 @@
 import os
-import numpy as np
-from io import BytesIO
 import struct
-from scipy.io.matlab._mio5 import MatFile5Reader
-from scipy.io import loadmat
-from scipy.io.matlab._mio5_params import OPAQUE_DTYPE
-from readmat.class_parser import *
+from io import BytesIO
 from typing import List, Tuple, Dict, Union, Optional, Any
+
+import numpy as np
+from scipy.io import loadmat
+from scipy.io.matlab._mio5 import MatFile5Reader
+from scipy.io.matlab._mio5_params import OPAQUE_DTYPE
+
+from .class_parser import *
 
 
 class SubsystemReader:
@@ -65,7 +67,7 @@ class SubsystemReader:
         return offsets
 
     def _read_class_names(self, fc_len: int, regionStart: int, regionEnd: int) -> None:
-        """Parses Region 1"""
+        """Parses Region 1 to extract class names"""
 
         # Get table of contents
         nbytes = regionStart - self.ssdata.tell()  # This block ends at offsets
@@ -83,7 +85,7 @@ class SubsystemReader:
             )  # This list is ordered by class_id
 
     def _read_object_types(self, regionStart: int, regionEnd: int) -> None:
-        """Parses Region 3"""
+        """Parses Region 3 to extract object dependency IDs"""
 
         self.ssdata.seek(regionStart)
         self.ssdata.seek(24, 1)  # Discard first val which is all zeros
@@ -98,9 +100,8 @@ class SubsystemReader:
             )  # This list is ordered by object_id
 
     def _get_default_field_pos(self) -> None:
-        """Gets the default field positions"""
+        """Gets the byte markers for arrays containing default property values of an object"""
 
-        print(self._cell_pos)
         self.ssdata.seek(self._cell_pos[-1])  # Last Cell
         self.ssdata.seek(8, 1)  # Reads the miMATRIX Header
         self.ssdata.seek(16, 1)  # Skip Array Flags
@@ -130,7 +131,7 @@ class SubsystemReader:
         ]  # First struct is ignored
 
     def _initialize_subsystem(self) -> None:
-        """parses the subsystem data and and creates a link"""
+        """parses the subsystem data and and links different parts of metadata"""
         self.ssdata.seek(144)  # discard headers
 
         self._read_field_content_ids()
@@ -216,13 +217,13 @@ class SubsystemReader:
                 object_id = arr[-2, 0].item()
                 ndims = arr[1, 0].item()
                 dims = arr[2 : 2 + ndims, 0]
-                print("Found object reference")
                 return self.read_object_arrays(object_id, dims)
 
         return arr
 
     def read_miMATRIX(self, MR: MatFile5Reader) -> Any:
         """Wrapper function around the get_variables() of scipy.io.matlab MatFile5Reader class."""
+
         MR.byte_order = self.byte_order
         MR.mat_stream.seek(0)
         MR.initialize_read()
@@ -240,6 +241,7 @@ class SubsystemReader:
 
     def read_mat_data(self, mat_data: bytes) -> Any:
         """Read the data from the mat file. Wrapper around scipy.io.matlab MatFile5Reader class."""
+
         byte_stream = BytesIO(mat_data)
         MR = MatFile5Reader(byte_stream)
         res = self.read_miMATRIX(MR)
@@ -283,7 +285,7 @@ class SubsystemReader:
         return nfields
 
     def get_default_fields(self, class_id: int) -> Dict[str, Any]:
-        """Get the default properties for a given class ID"""
+        """Extract the properties with default values for an object"""
 
         def_class_pos = self._default_fields_pos[class_id - 1]
         self.ssdata.seek(def_class_pos)
@@ -419,7 +421,6 @@ def load_from_mat(file_path: str, raw_data: bool = False) -> Dict[str, Any]:
             continue
 
         # Read all objects in array
-        print(f"Reading object array for {var} with ID {object_id}")
         obj_array = SR.read_object_arrays(object_id, dims)
         mdict[var] = obj_array
 
