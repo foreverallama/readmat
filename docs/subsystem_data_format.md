@@ -117,7 +117,9 @@ Field contents are stored from Cell 3 onwards. The data element used to store fi
 
 There are always three more cells at the end of the array, which appear after all the field content cells. The purpose of these cells is partially unknown. It is highly likely that these contain some kind of metadata for user-defined objects, which needs to be studied further. 
 
-For MATLAB datatypes implemented as classes, such as `datetime`, `table`, and `string`, they are typically empty cells, except for one. The very last cell of this cell array contains a list of all properties with the default values they are initialized with. The contents of this cell is another cell array itself. The last cell within this array contains a `struct` whose fields are the property names and field contents are the default property values.
+For MATLAB datatypes implemented as classes, such as `datetime`, `table`, and `string`, they are typically empty cells, except for one. The very last cell of this cell array contains a list of all properties with the default values they are initialized with. 
+
+The contents of this cell is another cell array itself, with the dimensions `(n_classes + 1, 1)`. Each cell is written in place as a `struct`. The purpose of the first cell is unknown. The second cell onwards contains the default values of the properties of a class, ordered by `class_id`. These properties are written in place as the fields of the struct array, where the field names are the property names, and the field contents are the default values of the corresponding property.
 
 ## Data Element 2: Character Array
 

@@ -6,22 +6,24 @@ from scipy.io.matlab._mio5 import MatFile5Reader
 from scipy.io import loadmat
 from scipy.io.matlab._mio5_params import OPAQUE_DTYPE
 from readmat.class_parser import *
+from typing import List, Tuple, Dict, Union, Optional, Any
 
 
 class SubsystemReader:
-    def __init__(self, ssdata, raw_data=False):
-        self.ssdata = ssdata
-        self._cell_pos = []
-        self.names = []
-        self.class_names = []
-        self._unique_objects = []
-        self._offsets = []
-        self.raw_data = raw_data
-        self.byte_order = self._read_byte_order()
+    def __init__(self, ssdata: BytesIO, raw_data: bool = False) -> None:
+        self.ssdata: BytesIO = ssdata
+        self._cell_pos: List[int] = []
+        self.names: List[str] = []
+        self.class_names: List[str] = []
+        self._unique_objects: List[Tuple[int, int, int, int]] = []
+        self._offsets: List[int] = []
+        self._default_fields_pos: List[int] = []
+        self.raw_data: bool = raw_data
+        self.byte_order: str = self._read_byte_order()
 
         self._initialize_subsystem()
 
-    def _read_byte_order(self):
+    def _read_byte_order(self) -> str:
         """Reads subsystem byte order"""
 
         self.ssdata.seek(2)
@@ -29,24 +31,23 @@ class SubsystemReader:
         byte_order = "<" if data == b"IM" else ">"
         return byte_order
 
-    def _read_field_content_ids(self):
+    def _read_field_content_ids(self) -> None:
         """Gets field content byte markers"""
 
-        data = self.ssdata.read(8)
+        data = self.ssdata.read(
+            8
+        )  # Reads the miMATRIX Header of mxOPAQUE_CLASS metadata
         _, nbytes = struct.unpack(self.byte_order + "II", data)
         endPos = self.ssdata.tell() + nbytes
 
-        self.ssdata.seek(40, 1)
-        self._cell_pos.append(self.ssdata.tell())
+        self.ssdata.seek(40, 1)  # Discard variable headers
         while self.ssdata.tell() < endPos:
+            self._cell_pos.append(self.ssdata.tell())
             data = self.ssdata.read(8)
             _, nbytes = struct.unpack(self.byte_order + "II", data)
-            self._cell_pos.append(
-                self.ssdata.tell() + nbytes
-            )  # This is ordered by field_content_id
             self.ssdata.seek(nbytes, 1)
 
-    def _read_names_len(self):
+    def _read_names_len(self) -> int:
         """Gets the length of the names"""
 
         data = self.ssdata.read(8)
@@ -54,7 +55,7 @@ class SubsystemReader:
 
         return fc_len
 
-    def _read_region_offsets(self, cell1_start):
+    def _read_region_offsets(self, cell1_start: int) -> List[int]:
         """Gets byte markers for region offsets"""
 
         data = self.ssdata.read(32)
@@ -63,7 +64,7 @@ class SubsystemReader:
 
         return offsets
 
-    def _read_class_names(self, fc_len, regionStart, regionEnd):
+    def _read_class_names(self, fc_len: int, regionStart: int, regionEnd: int) -> None:
         """Parses Region 1"""
 
         # Get table of contents
@@ -81,7 +82,7 @@ class SubsystemReader:
                 self.names[class_index - 1]
             )  # This list is ordered by class_id
 
-    def _read_object_types(self, regionStart, regionEnd):
+    def _read_object_types(self, regionStart: int, regionEnd: int) -> None:
         """Parses Region 3"""
 
         self.ssdata.seek(regionStart)
@@ -96,7 +97,39 @@ class SubsystemReader:
                 (class_id, type1_id, type2_id, dep_id)
             )  # This list is ordered by object_id
 
-    def _initialize_subsystem(self):
+    def _get_default_field_pos(self) -> None:
+        """Gets the default field positions"""
+
+        print(self._cell_pos)
+        self.ssdata.seek(self._cell_pos[-1])  # Last Cell
+        self.ssdata.seek(8, 1)  # Reads the miMATRIX Header
+        self.ssdata.seek(16, 1)  # Skip Array Flags
+
+        data = self.ssdata.read(8)  # Reads dimensions flag of cell array
+        _, ndims = struct.unpack(self.byte_order + "II", data)
+        data = self.ssdata.read(ndims)
+        dims = struct.unpack(self.byte_order + "I" * (ndims // 4), data)
+        if ndims // 4 > 2 or dims[1] != 1:
+            raise ValueError(
+                "Invalid dimensions for default fields. Expected Nx1 array."
+            )
+
+        self.ssdata.seek(ndims % 8, 1)  # Padding to 8 byte boundary
+        self.ssdata.seek(8, 1)  # Skip variable name
+
+        for i in range(0, dims[0]):
+            data = self.ssdata.read(8)  # Reads the miMATRIX Header
+            _, nbytes = struct.unpack(self.byte_order + "II", data)
+            self._default_fields_pos.append(
+                self.ssdata.tell() - 8
+            )  # Extract struct array pos
+            self.ssdata.seek(nbytes, 1)
+
+        self._default_fields_pos = self._default_fields_pos[
+            1:
+        ]  # First struct is ignored
+
+    def _initialize_subsystem(self) -> None:
         """parses the subsystem data and and creates a link"""
         self.ssdata.seek(144)  # discard headers
 
@@ -118,20 +151,21 @@ class SubsystemReader:
         self._read_object_types(
             regionStart=self._offsets[2], regionEnd=self._offsets[3]
         )
+        self._get_default_field_pos()
 
         return
 
-    def get_object_dependencies(self, object_id):
+    def get_object_dependencies(self, object_id: int) -> Tuple[int, int, int, int]:
         """Get the object dependencies for a given object ID"""
 
         return self._unique_objects[object_id - 1]
 
-    def get_class_name(self, class_id):
+    def get_class_name(self, class_id: int) -> str:
         """Get the class name for a given class ID"""
 
         return self.class_names[class_id - 1]
 
-    def check_object_reference(self, res):
+    def check_object_reference(self, res: Any) -> bool:
         """Checks if the field content is a reference to another object"""
         if not isinstance(res, np.ndarray):
             return False
@@ -152,13 +186,13 @@ class SubsystemReader:
         if ndims <= 1 or len(shapes) != ndims:
             return False
 
-        # * Need to study condition with more examples
-        if np.count_nonzero(shapes != 1) > 1:  # At most 1 dimension can have size > 1
-            return False
+        # # * Need to study condition with more examples
+        # if np.count_nonzero(shapes != 1) > 1:  # At most 1 dimension can have size > 1
+        #     return False
 
         return True
 
-    def process_res_array(self, arr):
+    def process_res_array(self, arr: Any) -> Any:
         """Iteratively check if result is an object reference and extract data"""
 
         # Implemented considering deeply nested arrays like Cells, Structs in MATLAB
@@ -182,11 +216,12 @@ class SubsystemReader:
                 object_id = arr[-2, 0].item()
                 ndims = arr[1, 0].item()
                 dims = arr[2 : 2 + ndims, 0]
+                print("Found object reference")
                 return self.read_object_arrays(object_id, dims)
 
         return arr
 
-    def read_miMATRIX(self, MR):
+    def read_miMATRIX(self, MR: MatFile5Reader) -> Any:
         """Wrapper function around the get_variables() of scipy.io.matlab MatFile5Reader class."""
         MR.byte_order = self.byte_order
         MR.mat_stream.seek(0)
@@ -203,14 +238,14 @@ class SubsystemReader:
 
         return res
 
-    def read_mat_data(self, mat_data):
+    def read_mat_data(self, mat_data: bytes) -> Any:
         """Read the data from the mat file. Wrapper around scipy.io.matlab MatFile5Reader class."""
         byte_stream = BytesIO(mat_data)
         MR = MatFile5Reader(byte_stream)
         res = self.read_miMATRIX(MR)
         return res
 
-    def get_num_fields(self, type1_id, type2_id):
+    def get_num_fields(self, type1_id: int, type2_id: int) -> Optional[int]:
         """Extract the number of fields for the object"""
 
         # Metadata for Type 1 objects are stored in offsets[1]
@@ -247,9 +282,33 @@ class SubsystemReader:
 
         return nfields
 
-    def extract_from_field(self, nfields):
+    def get_default_fields(self, class_id: int) -> Dict[str, Any]:
+        """Get the default properties for a given class ID"""
+
+        def_class_pos = self._default_fields_pos[class_id - 1]
+        self.ssdata.seek(def_class_pos)
+        data = self.ssdata.read(8)  # Read miMATRIX header
+        _, nbytes = struct.unpack(self.byte_order + "II", data)
+        self.ssdata.seek(-8, 1)
+        mat_data = self.ssdata.read(nbytes + 8)  # Read the full cell contents
+        obj_default_fields = self.read_mat_data(mat_data)
+        # Wrap in dict
+        if obj_default_fields.size == 0:
+            return {}
+        else:
+            return {
+                field: obj_default_fields[0, 0][field]
+                for field in obj_default_fields.dtype.names
+            }
+            # Indexing by (0,0) since the struct array is expected to be 1x1 dimensions
+
+    def extract_from_field(self, nfields: int, class_id: int) -> Dict[str, Any]:
         """Extracts contents of each field of an object"""
-        obj_fields = {}
+
+        curPos = self.ssdata.tell()
+        obj_fields = self.get_default_fields(class_id)
+
+        self.ssdata.seek(curPos)
         while nfields > 0:
             # Extract field name
             data = self.ssdata.read(12)
@@ -275,7 +334,7 @@ class SubsystemReader:
 
         return obj_fields
 
-    def convert_to_object(self, fields, class_name):
+    def convert_to_object(self, fields: Dict[str, Any], class_name: str) -> Any:
         """Converts the object to a Python compatible object"""
 
         if class_name == "datetime":
@@ -297,10 +356,13 @@ class SubsystemReader:
 
         return obj
 
-    def extract_fields(self, class_id, type1_id, type2_id):
+    def extract_fields(
+        self, class_id: int, type1_id: int, type2_id: int
+    ) -> Tuple[Dict[str, Any], str]:
         """Extracts the fields from the object"""
+
         nfields = self.get_num_fields(type1_id, type2_id)
-        obj_fields = self.extract_from_field(nfields)
+        obj_fields = self.extract_from_field(nfields, class_id)
         class_name = self.get_class_name(class_id)
 
         fields = obj_fields
@@ -309,30 +371,26 @@ class SubsystemReader:
 
         return fields, class_name
 
-    def read_nested_objects(self, object_id, ndeps):
+    def read_nested_objects(self, object_id: int) -> Dict[str, Any]:
         """Reads nested objects for a given object
         For e.g. if the property of an object is another object"""
+
         class_id, type1_id, type2_id, _ = self.get_object_dependencies(object_id)
         obj, class_name = self.extract_fields(class_id, type1_id, type2_id)
-
-        if ndeps > 0:
-            obj = self.read_nested_objects(
-                object_id=object_id + 1, ndeps=ndeps - 1
-            )  # Recursively extract the object
-
         res = {"__class_name__": class_name, "__fields__": obj}
 
         return res
 
-    def read_object_arrays(self, object_id, dims):
+    def read_object_arrays(self, object_id: int, dims: List[int]) -> np.ndarray:
         """Reads an object array for a given variable"""
+
         obj_array = []
         total_objects_in_array = np.prod(np.array(dims))
 
         for i in range(object_id - total_objects_in_array + 1, object_id + 1):
             _, _, _, dep_id = self.get_object_dependencies(object_id)
             ndeps = dep_id - object_id
-            res = self.read_nested_objects(object_id=i, ndeps=ndeps)
+            res = self.read_nested_objects(object_id=i)
             obj_array.append(res)
             i = i + ndeps
 
@@ -340,12 +398,12 @@ class SubsystemReader:
         return obj_array
 
 
-def load_from_mat(file_path, raw_data=False):
+def load_from_mat(file_path: str, raw_data: bool = False) -> Dict[str, Any]:
     """Reads data from file path and returns all data"""
 
     mdict = loadmat(file_path)
     ssdata = BytesIO(mdict["__function_workspace__"])
-    SR = SubsystemReader(ssdata)
+    SR = SubsystemReader(ssdata, raw_data)
 
     for var, data in mdict.items():
         if not isinstance(data, np.ndarray):
@@ -361,13 +419,16 @@ def load_from_mat(file_path, raw_data=False):
             continue
 
         # Read all objects in array
+        print(f"Reading object array for {var} with ID {object_id}")
         obj_array = SR.read_object_arrays(object_id, dims)
         mdict[var] = obj_array
 
     return mdict
 
 
-def read_subsystem_data_legacy(file_path, raw_data=False):
+def read_subsystem_data_legacy(
+    file_path: str, raw_data: bool = False
+) -> Dict[str, Any]:
     """Reads subsystem data from file path and returns list of objects by their object IDs"""
     mdict = loadmat(file_path)
     data_reference = mdict["None"]
