@@ -2,6 +2,23 @@
 
 The MAT-file format is well documented [here](https://www.mathworks.com/help/pdf_doc/matlab/matfile_format.pdf), so I won't be going into details. Most of this is already implemented within `scipy.io.matlab`. However, MATLAB has not included documentation for decoding objects. These objects could be user-defined classes, or MATLAB datatypes like `string`, `datetime`, `table`, etc. Reading this information from `.mat` files is currently not implemented within `scipy.io`, hence decoding and understanding the format is the first step to extract object information.
 
+<!--TOC-->
+
+- [The Basics](#the-basics)
+- [mxOPAQUE_CLASS Data Element](#mxopaqueclass-data-element)
+  - [Array Flags Subelement](#array-flags-subelement)
+  - [Array Name](#array-name)
+  - [Type System Name](#type-system-name)
+  - [Class Name](#class-name)
+  - [Object Metadata](#object-metadata)
+    - [Object Reference](#object-reference)
+    - [Dimensions Array](#dimensions-array)
+    - [Object ID](#object-id)
+    - [Class ID](#class-id)
+- [Subsystem Data](#subsystem-data)
+
+<!--TOC-->
+
 ## The Basics
 
 Here I'll give a brief overview of the MAT-file format. For more details you can refer to the documentation. You can skip to the next section if you're already familiar with this.

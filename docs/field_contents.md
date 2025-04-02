@@ -4,6 +4,15 @@ The contents of a field defined in its corresponding cell depends on the class a
 
 Field contents of object arrays of MATLAB datatypes like `string` or `datetime` are contained as arrays themselves. For example, if you define a `2x2` `datetime` array, the properties of this object array will be a `2x2` array.
 
+<!--TOC-->
+
+- [`datetime`](#datetime)
+- [`duration`:](#duration)
+- [`string`:](#string)
+- [What if the field contains an object?](#what-if-the-field-contains-an-object)
+
+<!--TOC-->
+
 ## `datetime`
 
 Objects of this class contain the following properties:

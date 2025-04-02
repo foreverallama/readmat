@@ -1,5 +1,23 @@
 # Subsystem Data Format
 
+<!--TOC-->
+
+- [Basic File Header](#basic-file-header)
+- [Data Element 1: mxStruct_CLASS](#data-element-1-mxstructclass)
+  - [Data Subelement: mxOPAQUE_CLASS](#data-subelement-mxopaqueclass)
+  - [Cell 1 - Linking Metadata](#cell-1---linking-metadata)
+    - [Region 1: Class Identifier Metadata](#region-1-class-identifier-metadata)
+    - [Region 3: Object Identifier Metadata](#region-3-object-identifier-metadata)
+    - [Region 2: Type 1 Object Metadata](#region-2-type-1-object-metadata)
+    - [Region 4: Type 2 Object Metadata](#region-4-type-2-object-metadata)
+    - [Other Regions](#other-regions)
+  - [Cell 2 - Padding](#cell-2---padding)
+  - [Field Content Cells](#field-content-cells)
+  - [Remaining Cells](#remaining-cells)
+- [Data Element 2: Character Array](#data-element-2-character-array)
+
+<!--TOC-->
+
 If you remember, the MAT-file header contains a field called `Subsystem Offset`. This is essentially a byte marker to another region of the MAT-file, which is the subsystem data. This appears as a normal data element in the MAT-file (typically the last data element in file). This data element is stored as `mxUINT8_CLASS` values, and does **not** have an array name. The subsystem data is contained within the real part of this data element.
 
 The data within this element is formatted like a MAT-file itself, and contains information about all objects stored in the MAT-file, along with their contents. It has the following structure:
