@@ -1,14 +1,13 @@
-import os
 import struct
 from io import BytesIO
-from typing import List, Tuple, Dict, Union, Optional, Any
+from typing import Any, Dict, List, Optional, Tuple, no_type_check
 
 import numpy as np
 from scipy.io import loadmat
 from scipy.io.matlab._mio5 import MatFile5Reader
 from scipy.io.matlab._mio5_params import OPAQUE_DTYPE
 
-from .class_parser import *
+from .class_parser import MatDateTime, MatDuration, parse_string
 
 
 class SubsystemReader:
@@ -61,8 +60,8 @@ class SubsystemReader:
         """Gets byte markers for region offsets"""
 
         data = self.ssdata.read(32)
-        offsets = struct.unpack(self.byte_order + "8I", data)
-        offsets = [offset + cell1_start for offset in offsets]
+        offsets_t = struct.unpack(self.byte_order + "8I", data)
+        offsets = [offset + cell1_start for offset in offsets_t]
 
         return offsets
 
@@ -336,6 +335,7 @@ class SubsystemReader:
 
         return obj_fields
 
+    @no_type_check
     def convert_to_object(self, fields: Dict[str, Any], class_name: str) -> Any:
         """Converts the object to a Python compatible object"""
 
@@ -363,7 +363,9 @@ class SubsystemReader:
     ) -> Tuple[Dict[str, Any], str]:
         """Extracts the fields from the object"""
 
-        nfields = self.get_num_fields(type1_id, type2_id)
+        nfields = (
+            self.get_num_fields(type1_id, type2_id) or 0
+        )  # If nfields is None, set to 0
         obj_fields = self.extract_from_field(nfields, class_id)
         class_name = self.get_class_name(class_id)
 
@@ -435,9 +437,11 @@ def read_subsystem_data_legacy(
     data_reference = mdict["None"]
     var_name = data_reference["s0"][0].decode("utf-8")
     object_id = data_reference["arr"][0][4][0]
+    ndims = data_reference["arr"][0][1][0]
+    dims = [data_reference["arr"][0][2 + i][0] for i in range(ndims)]
 
     ssdata = BytesIO(mdict["__function_workspace__"])
     SR = SubsystemReader(ssdata, raw_data)
-    obj_dict = SR.parse_subsystem()
+    obj_dict = SR.read_object_arrays(object_id, dims)
     obj_dict[var_name] = obj_dict.pop(object_id)
     return obj_dict

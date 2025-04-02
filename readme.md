@@ -41,10 +41,10 @@ MATLAB objects like `datetime` and `duration` are implemented using wrapper obje
 
 ```python
 data_dict = load_from_mat(file_path)
-datetime_value = data['myVarName']['__fields__']
+datetime_value = data["myVarName"]["__fields__"]
 
-dt = datetime_value[0] # Returns a datetime object
-print(datetime_value) # Prints datetime in readable format
+dt = datetime_value[0]  # Returns a datetime object
+print(datetime_value)  # Prints datetime in readable format
 ```
 
 Raw data can be accessed through its properties or using `repr()`
@@ -72,5 +72,5 @@ Big thanks to [mahalex](https://github.com/mahalex/MatFileHandler) for their det
 
 - [x] Update `docs/`
 - [x] Update `scipy.io` to extract variable names from objects
-- [ ] Update `scipy.io` to include object reference checks inside `read_real_complex()` 
+- [ ] Update `scipy.io` to include object reference checks inside `read_real_complex()`
 - [ ] Add tests for each class type

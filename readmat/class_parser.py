@@ -1,7 +1,7 @@
-import numpy as np
-import datetime
 from datetime import datetime, timezone
-import pytz
+
+import numpy as np
+import pytz  # type: ignore
 
 # TODO:Add support for detecting object references
 # TODO:
@@ -10,7 +10,6 @@ import pytz
 class MatDateTime:
     # TODO: Add support for display formatting
     def __init__(self, obj_dict):
-
         self.data = obj_dict.get("data")
         self.tz = self._extract_string(obj_dict.get("tz", "UTC"))
         self.fmt = self._extract_string(obj_dict.get("fmt", "%Y-%m-%d %H:%M:%S %Z"))
@@ -19,7 +18,6 @@ class MatDateTime:
         return val.item() if isinstance(val, np.ndarray) and val.size > 0 else val
 
     def get_datetime(self):
-
         data_array = np.atleast_1d(self.data)
         # If empty/missing value
         if data_array.size == 0:
@@ -146,11 +144,10 @@ class MatDuration:
 
 
 def parse_string(object, field_name, byte_order):
-
     # Skip data[0], not sure what it flags
     if field_name != "any":
         print("Field not supported yet")
-        return data
+        return object
     else:
         data = object["any"]
 

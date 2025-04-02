@@ -15,13 +15,13 @@ Here I'll give a brief overview of the MAT-file format. For more details you can
   - Each data element has an 8 byte tag, followed by its data
   - Since MATLAB tags all variables as arrays/matrices, this tag should indicate the data element as a `miMATRIX` or `miCOMPRESSED` if file compression was enabled
   - Additionally, the tag mentions the number of bytes to read for the data element
-  
+
 - Depending on the data type, the data element consists of different sub headers.
   - The first 16 bytes, called `Array Flag`, identifies the datatype of the data element.
   - The following bytes contain some additional information like `array name`, `array dimensions`, `field names` if its a `struct`, etc. The documentation goes into this in detail.
   - Finally, the last part of this data element contains the actual data in the array corresponding to its datatype.
 
-If you look at the documentation in `Table 1-3`, you'll notice only 15 MATLAB array types are mentioned. However, there are at least 2 more, with the last one being `mxOPAQUE_CLASS` which is what we are interested in. 
+If you look at the documentation in `Table 1-3`, you'll notice only 15 MATLAB array types are mentioned. However, there are at least 2 more, with the last one being `mxOPAQUE_CLASS` which is what we are interested in.
 
 ## mxOPAQUE_CLASS Data Element
 
@@ -59,7 +59,7 @@ Object metadata is written as a miUINT32 array. This can be read as a data subel
 
 | Subelements | Number of Bytes |
 |-----------|-----------|
-| Object Reference | 4 bytes | 
+| Object Reference | 4 bytes |
 | Dimensions Array | numberOfDimensions * 4 bytes |
 | Object ID | 4 bytes |
 | Class ID | 4 bytes |
@@ -70,7 +70,7 @@ This contains the value `0xDD000000` which is used internally by MATLAB to ident
 
 #### Dimensions Array
 
-The first value of the array indicates the number of dimensions (`ndims`) of the object array, and the next `ndim` integers list the size of each dimension. For example, if its a single object, this subelement would contain the values `2, 1, 1`. We typically deal with 2D arrays, hence `ndims` is usually 2. 
+The first value of the array indicates the number of dimensions (`ndims`) of the object array, and the next `ndim` integers list the size of each dimension. For example, if its a single object, this subelement would contain the values `2, 1, 1`. We typically deal with 2D arrays, hence `ndims` is usually 2.
 
 #### Object ID
 
@@ -78,11 +78,8 @@ This contains a number which serves as a unique identifier for the object. All o
 
 #### Class ID
 
-This contains a number which servers as a unique identifier for the class type of an object. All objects in a MAT-file are associated with a class ID to identify the class they belong to. Class IDs are numbered starting from `1`. 
+This contains a number which servers as a unique identifier for the class type of an object. All objects in a MAT-file are associated with a class ID to identify the class they belong to. Class IDs are numbered starting from `1`.
 
 ## Subsystem Data
 
 I'll talk about this in more detail [here](./subsystem_data_format.md)
-
-
-

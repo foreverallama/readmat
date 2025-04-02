@@ -8,8 +8,8 @@ The data within this element is formatted like a MAT-file itself, and contains i
 ├──Basic File Header
 ├── Data Element: mxSTRUCT_CLASS
 │   ├── Field "MCOS": Cell Array
-        ├── Cell 1 
-        ├── Cell 2 
+        ├── Cell 1
+        ├── Cell 2
         ├── Cell 3
         ├── Cell 4
         .
@@ -40,7 +40,7 @@ This subelement is quite similar to the data element that appears in the normal 
 - The subelement is of class type `FileWrapper__`
 - The object metadata is **not** a `mxUINT32` array, but instead a `mxCELL_CLASS` array
 
-This cell array is what we need to look at closely. The cell array has a dimension `(N + 5, 1)`, where $N = \sum_{\text{objects}} \text{(number of properties of object)}$. The first cell in the array contains some metadata. The second cell is empty of size `0 bytes`, and is most likely used for padding. The third cell onwards contains the contents of each field for every object in the MAT-file, stored as a regular data element. Finally, there are 3 more cells in the array that appear at the end, the purpose of which is not known yet. This structure is visualized below. 
+This cell array is what we need to look at closely. The cell array has a dimension `(N + 5, 1)`, where $N = \sum_{\text{objects}} \text{(number of properties of object)}$. The first cell in the array contains some metadata. The second cell is empty of size `0 bytes`, and is most likely used for padding. The third cell onwards contains the contents of each field for every object in the MAT-file, stored as a regular data element. Finally, there are 3 more cells in the array that appear at the end, the purpose of which is not known yet. This structure is visualized below.
 
 | Cell Array Index | fieldContentID | Cell Content |
 |-----------|-----------|-----------|
@@ -103,7 +103,7 @@ This region is structured exactly the same as _Region 2_, but is for Type 2 obje
 
 #### Other Regions
 
-The 5th, 6th and 7th offset values indicate other metadata regions whose purpose is unknown. The last offset points to the end of this cell. 
+The 5th, 6th and 7th offset values indicate other metadata regions whose purpose is unknown. The last offset points to the end of this cell.
 
 ### Cell 2 - Padding
 
@@ -115,9 +115,9 @@ Field contents are stored from Cell 3 onwards. The data element used to store fi
 
 ### Remaining Cells
 
-There are always three more cells at the end of the array, which appear after all the field content cells. The purpose of these cells is partially unknown. It is highly likely that these contain some kind of metadata for user-defined objects, which needs to be studied further. 
+There are always three more cells at the end of the array, which appear after all the field content cells. The purpose of these cells is partially unknown. It is highly likely that these contain some kind of metadata for user-defined objects, which needs to be studied further.
 
-For MATLAB datatypes implemented as classes, such as `datetime`, `table`, and `string`, they are typically empty cells, except for one. The very last cell of this cell array contains a list of all properties with the default values they are initialized with. 
+For MATLAB datatypes implemented as classes, such as `datetime`, `table`, and `string`, they are typically empty cells, except for one. The very last cell of this cell array contains a list of all properties with the default values they are initialized with.
 
 The contents of this cell is another cell array itself, with the dimensions `(n_classes + 1, 1)`. Each cell is written in place as a `struct`. The purpose of the first cell is unknown. The second cell onwards contains the default values of the properties of a class, ordered by `class_id`. These properties are written in place as the fields of the struct array, where the field names are the property names, and the field contents are the default values of the corresponding property.
 
