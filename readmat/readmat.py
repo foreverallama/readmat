@@ -203,6 +203,16 @@ class SubsystemReader:
         if not isinstance(arr, np.ndarray):
             return arr
 
+        # Handling structured arrays
+        if arr.dtype.names:
+            result = np.empty_like(arr)
+            for name in arr.dtype.names:
+                result[name] = np.vectorize(self.process_res_array, otypes=[object])(
+                    arr[name]
+                )
+            return result
+
+        # Handling object arrays
         if arr.dtype == np.dtype("object"):
             result = np.empty_like(arr)
 
@@ -211,12 +221,12 @@ class SubsystemReader:
                 result[idx] = self.process_res_array(item)
 
             return result
-        else:
-            if self.check_object_reference(arr):
-                object_id = arr[-2, 0].item()
-                ndims = arr[1, 0].item()
-                dims = arr[2 : 2 + ndims, 0]
-                return self.read_object_arrays(object_id, dims)
+
+        if self.check_object_reference(arr):
+            object_id = arr[-2, 0].item()
+            ndims = arr[1, 0].item()
+            dims = arr[2 : 2 + ndims, 0]
+            return self.read_object_arrays(object_id, dims)
 
         return arr
 
