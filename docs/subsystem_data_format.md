@@ -146,3 +146,5 @@ Finally, the last part of the subsystem data contains another data element which
 The data within this element contains a 4 byte header indicating MAT-file version and Endianness, and a single data element of `mxSTRUCT` type. This data element contains a single field `MCOS`. However, the contents of this field are empty.
 
 My guess is MATLAB is using some kind of recursive function to write the subsystem data, popping out objects from a buffer as they are written, resulting in this empty data element at the end.
+
+There are still quite a few unknowns which could use some reverse engineering. I have detailed these in [unknowns.md](./unknowns.md). If anyone wants to contribute to this, pelase do open an issue!
