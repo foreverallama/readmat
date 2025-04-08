@@ -176,13 +176,13 @@ class MatTable:
         self.rownames = obj_dict.get("rownames")
         self.varnames = obj_dict.get("varnames")
         self.props = obj_dict.get("props")
-        self._df = None
+        self.df = self._build_dataframe()
 
     def __repr__(self):
-        return repr(self._df)
+        return repr(self.df)
 
     def __str__(self):
-        return str(self._df)
+        return str(self.df)
 
     def _extract_cell_value(self, cell):
         if isinstance(cell, np.ndarray) and cell.dtype == object:
@@ -206,15 +206,6 @@ class MatTable:
 
         return df
 
-    @property
-    def df(self):
-        if self._df is None:
-            self._df = self._build_dataframe()
-        return self._df
-
-    def __getitem__(self, key):
-        return self.df[key]
-
 
 class MatTimetable:
     def __init__(self, obj_dict):
@@ -226,13 +217,13 @@ class MatTimetable:
         self.numRows = self.any["numRows"]
         self.numVars = self.any["numVars"]
         self.rowTimes = self.any["rowTimes"]
-        self._df = None
+        self.df = self._build_dataframe()
 
     def __str__(self):
-        return str(self._df)
+        return str(self.df)
 
     def __repr__(self):
-        return repr(self._df)
+        return repr(self.df)
 
     def _extract_cell_value(self, cell):
         if isinstance(cell, np.ndarray) and cell.dtype == object:
@@ -255,15 +246,6 @@ class MatTimetable:
         df.index.name = self._extract_cell_value(self.dimNames[0, 0]).item()
 
         return df
-
-    @property
-    def df(self):
-        if self._df is None:
-            self._df = self._build_dataframe()
-        return self._df
-
-    def __getitem__(self, key):
-        return self.df[key]
 
 
 def convert_to_object(fields, class_name, byte_order):
