@@ -1,13 +1,13 @@
 import struct
 from io import BytesIO
-from typing import Any, Dict, List, Optional, Tuple, no_type_check
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from scipy.io import loadmat
 from scipy.io.matlab._mio5 import MatFile5Reader
 from scipy.io.matlab._mio5_params import OPAQUE_DTYPE
 
-from .class_parser import MatDateTime, MatDuration, parse_string
+from .class_parser import convert_to_object
 
 
 class SubsystemReader:
@@ -345,29 +345,6 @@ class SubsystemReader:
 
         return obj_fields
 
-    @no_type_check
-    def convert_to_object(self, fields: Dict[str, Any], class_name: str) -> Any:
-        """Converts the object to a Python compatible object"""
-
-        if class_name == "datetime":
-            obj = MatDateTime(fields)
-
-        elif class_name == "duration":
-            obj = MatDuration(fields)
-
-        elif class_name == "string":
-            obj = parse_string(
-                fields,
-                "any" if "any" in fields else None,
-                byte_order=self.byte_order,
-            )
-
-        else:
-            # For all other classes, return raw data
-            obj = fields
-
-        return obj
-
     def extract_fields(
         self, class_id: int, type1_id: int, type2_id: int
     ) -> Tuple[Dict[str, Any], str]:
@@ -381,7 +358,7 @@ class SubsystemReader:
 
         fields = obj_fields
         if not self.raw_data:
-            fields = self.convert_to_object(obj_fields, class_name)
+            fields = convert_to_object(obj_fields, class_name, self.byte_order)
 
         return fields, class_name
 
@@ -416,7 +393,12 @@ def load_from_mat(file_path: str, raw_data: bool = False) -> Dict[str, Any]:
     """Reads data from file path and returns all data"""
 
     mdict = loadmat(file_path)
-    ssdata = BytesIO(mdict["__function_workspace__"])
+    ssdata = mdict.pop("__function_workspace__", None)
+    if ssdata is None:
+        print("No subsystem data found in the file.")
+        return mdict
+
+    ssdata = BytesIO(ssdata)
     SR = SubsystemReader(ssdata, raw_data)
 
     for var, data in mdict.items():
