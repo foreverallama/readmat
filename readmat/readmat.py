@@ -15,7 +15,7 @@ class SubsystemReader:
         self.ssdata: BytesIO = ssdata
         self._cell_pos: List[int] = []
         self.names: List[str] = []
-        self.class_names: List[str] = []
+        self.class_names: List[Tuple[Any | None, Any]] = []
         self._unique_objects: List[Tuple[int, int, int, int]] = []
         self._offsets: List[int] = []
         self._default_fields_pos: List[int] = []
@@ -78,9 +78,17 @@ class SubsystemReader:
         self.ssdata.seek(16, 1)  # Discard first val
         while self.ssdata.tell() < regionEnd:
             data = self.ssdata.read(16)
-            _, class_index, _, _ = struct.unpack(self.byte_order + "4I", data)
+            handle_class_name_index, class_index, _, _ = struct.unpack(
+                self.byte_order + "4I", data
+            )
+            handle_class_name = (
+                self.names[handle_class_name_index - 1]
+                if handle_class_name_index > 0
+                else None
+            )
+            class_name = self.names[class_index - 1]
             self.class_names.append(
-                self.names[class_index - 1]
+                (handle_class_name, class_name)
             )  # This list is ordered by class_id
 
     def _read_object_types(self, regionStart: int, regionEnd: int) -> None:
@@ -97,6 +105,23 @@ class SubsystemReader:
             self._unique_objects.append(
                 (class_id, type1_id, type2_id, dep_id)
             )  # This list is ordered by object_id
+
+    def _get_handle_pos(self, obj_dep_id: int) -> None:
+        """Moves the file pointer to the handle object position"""
+
+        self.ssdata.seek(self._offsets[4])  # Region 5
+        self.ssdata.seek(8, 1)  # Discard first block
+
+        while obj_dep_id - 1 > 0:
+            # first integer gives number of handle objects
+            data = self.ssdata.read(4)
+            nhandles = struct.unpack(self.byte_order + "I", data)[0]
+
+            # each handle represented by 4 byte integer
+            nbytes = nhandles * 4
+            nbytes = nbytes + ((nbytes + 4) % 8)
+            self.ssdata.seek(nbytes, 1)
+            obj_dep_id -= 1
 
     def _get_default_field_pos(self) -> None:
         """Gets the byte markers for arrays containing default property values of an object"""
@@ -160,7 +185,7 @@ class SubsystemReader:
 
         return self._unique_objects[object_id - 1]
 
-    def get_class_name(self, class_id: int) -> str:
+    def get_class_name(self, class_id: int) -> Tuple[Any | None, Any]:
         """Get the class name for a given class ID"""
 
         return self.class_names[class_id - 1]
@@ -352,28 +377,73 @@ class SubsystemReader:
 
     def extract_fields(
         self, class_id: int, type1_id: int, type2_id: int
-    ) -> Tuple[Dict[str, Any], str]:
+    ) -> Tuple[Dict[str, Any], Any, Any | None]:
         """Extracts the fields from the object"""
 
         nfields = (
             self.get_num_fields(type1_id, type2_id) or 0
         )  # If nfields is None, set to 0
         obj_fields = self.extract_from_field(nfields, class_id)
-        class_name = self.get_class_name(class_id)
+        handle_class_name, class_name = self.get_class_name(class_id)
 
         fields = obj_fields
         if not self.raw_data:
             fields = convert_to_object(obj_fields, class_name, self.byte_order)
 
-        return fields, class_name
+        return fields, class_name, handle_class_name
+
+    def extract_handles(self, obj_dep_id: int) -> Optional[Dict[str, Any]]:
+        """Reads handle objects of a class"""
+
+        self._get_handle_pos(obj_dep_id)
+
+        data = self.ssdata.read(4)
+        nhandles = struct.unpack(self.byte_order + "I", data)[0]
+        if nhandles == 0:
+            return None
+
+        nbytes = nhandles * 4
+        data = self.ssdata.read(nbytes)
+        handle_type2_ids = struct.unpack(self.byte_order + "I" * nhandles, data)
+
+        handle_dict = {}
+        key_index = 1
+        for handle_id in handle_type2_ids:
+            obj_id = next(
+                (
+                    i + 1
+                    for i, t in enumerate(self._unique_objects)
+                    if t[2] == handle_id
+                ),
+                -1,
+            )
+            if obj_id == -1:
+                raise ValueError(f"Object ID {handle_id} not found in handle_type1_ids")
+
+            class_id, _, _, _ = self.get_object_dependencies(obj_id)
+            handle_class_name, class_name = self.get_class_name(class_id)
+            key_name = f"{handle_class_name}.{class_name}.{key_index}"
+            handle_dict[key_name] = self.read_object_arrays(obj_id, dims=[1, 1])
+            key_index += 1
+
+        return handle_dict
 
     def read_nested_objects(self, object_id: int) -> Dict[str, Any]:
         """Reads nested objects for a given object
         For e.g. if the property of an object is another object"""
 
-        class_id, type1_id, type2_id, _ = self.get_object_dependencies(object_id)
-        obj, class_name = self.extract_fields(class_id, type1_id, type2_id)
+        class_id, type1_id, type2_id, dep_id = self.get_object_dependencies(object_id)
+        obj, class_name, handle_class_name = self.extract_fields(
+            class_id, type1_id, type2_id
+        )
+        obj_handles = self.extract_handles(dep_id)
+
         res = {"__class_name__": class_name, "__fields__": obj}
+
+        if handle_class_name is not None:
+            res["__handle_class__"] = handle_class_name
+        if obj_handles is not None:
+            res["__fields__"].update(obj_handles)
 
         return res
 
