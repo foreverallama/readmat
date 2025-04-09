@@ -56,7 +56,7 @@ A more detailed explanation of the MAT-file structure can be found [here](./docs
 
 There's still lots to do! I could use your help in the following:
 
-- Reverse engineer the MAT-file structure to include support for more objects like `timetable`, `categorical`, `calendarDuration` and others
+- Reverse engineer the MAT-file structure to include support for more objects like `categorical`, `calendarDuration` and others
 - Write object data into MAT-files
 - Write tests
 - Algorithmic optimization to integrate within the `scipy.io` framework
@@ -67,3 +67,9 @@ Feel free to create a PR if you'd like to add something, or open up an issue if 
 ## Acknowledgement
 
 Big thanks to [mahalex](https://github.com/mahalex/MatFileHandler) for their detailed breakdown of MAT-files. Most of this wouldn't be possible without it.
+
+## TODO
+
+- [ ] Code cleanup for readability
+- [ ] Squeeze output representation to keep it simple
+- [ ] Add tests
