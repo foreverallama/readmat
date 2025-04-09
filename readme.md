@@ -8,6 +8,7 @@ The `readmat` module provides tools for reading and parsing `.mat` files, partic
 - `datetime`
 - `duration`
 - `table`
+- `timetable`
 - User-defined objects
 
 ## Usage
@@ -47,13 +48,11 @@ dt = datetime_value[0]  # Returns a datetime object
 print(datetime_value)  # Prints datetime in readable format
 ```
 
-Raw data can be accessed through its properties or using `repr()`
-
-# Breakdown
+## Breakdown
 
 A more detailed explanation of the MAT-file structure can be found [here](./docs).
 
-# Contribution
+## Contribution
 
 There's still lots to do! I could use your help in the following:
 
@@ -61,16 +60,10 @@ There's still lots to do! I could use your help in the following:
 - Write object data into MAT-files
 - Write tests
 - Algorithmic optimization to integrate within the `scipy.io` framework
+- Documentation of the MAT-file format
 
-I've also opened an [issue](https://github.com/scipy/scipy/issues/22736) with `scipy.io` detailing some of the workflow, as well as a [PR](https://github.com/scipy/scipy/pull/22762) to develop this iteratively. Please feel free to contribute there as well!
+Feel free to create a PR if you'd like to add something, or open up an issue if you'd like to discuss! I've also opened an [issue](https://github.com/scipy/scipy/issues/22736) with `scipy.io` detailing some of the workflow, as well as a [PR](https://github.com/scipy/scipy/pull/22762) to develop this iteratively. Please feel free to contribute there as well!
 
-# Acknowledgement
+## Acknowledgement
 
 Big thanks to [mahalex](https://github.com/mahalex/MatFileHandler) for their detailed breakdown of MAT-files. Most of this wouldn't be possible without it.
-
-# TODO:
-
-- [x] Update `docs/`
-- [x] Update `scipy.io` to extract variable names from objects
-- [ ] Update `scipy.io` to include object reference checks inside `read_real_complex()`
-- [ ] Add tests for each class type

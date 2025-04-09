@@ -15,6 +15,7 @@ The MAT-file format is well documented [here](https://www.mathworks.com/help/pdf
     - [Dimensions Array](#dimensions-array)
     - [Object ID](#object-id)
     - [Class ID](#class-id)
+  - [Enumeration Classes](#enumeration-classes)
 - [Subsystem Data](#subsystem-data)
 
 <!--TOC-->
@@ -72,7 +73,7 @@ This subelement identifies the class which the object array belongs to. The clas
 
 ### Object Metadata
 
-Object metadata is written as a miUINT32 array. This can be read as a data subelement, and contains the following:
+Object metadata is written as a miUINT32 array. This can be read as a data subelement, and usually contains the following:
 
 | Subelements | Number of Bytes |
 |-----------|-----------|
@@ -96,6 +97,17 @@ This contains a number which serves as a unique identifier for the object. All o
 #### Class ID
 
 This contains a number which servers as a unique identifier for the class type of an object. All objects in a MAT-file are associated with a class ID to identify the class they belong to. Class IDs are numbered starting from `1`.
+
+### Enumeration Classes
+
+For enumeration instances, the object metadata is instead a `struct` array, containing the following fields:
+
+1. `EnumerationInstanceTag`: Contains an object reference (mentioned in the above table)
+2. `ClassName`: A metadata indicator to extract the enumeration class name from subsystem data
+3. `ValueNames`: A metadata indicator to extract the properties of this enumeration class
+4. `Values`: A `uint32` array of object metadata as indicated in the above table. The object ID and class ID point to the enumeration class object. If the properties of the enumeration class are not initialized/instantiated, then this is an empty array.
+5. `ValueIndices`: The value indices of the enumeration array
+6. `BuiltinClassName`: This is set if the enumeration class specifies a superclass. The value is a metadata indicator to extract the name of the superclass
 
 ## Subsystem Data
 

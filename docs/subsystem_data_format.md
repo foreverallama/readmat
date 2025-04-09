@@ -10,6 +10,7 @@
     - [Region 3: Object Identifier Metadata](#region-3-object-identifier-metadata)
     - [Region 2: Type 1 Object Metadata](#region-2-type-1-object-metadata)
     - [Region 4: Type 2 Object Metadata](#region-4-type-2-object-metadata)
+    - [Region 5: Handle Class Metadata](#region-5-handle-class-metadata)
     - [Other Regions](#other-regions)
   - [Cell 2 - Padding](#cell-2---padding)
   - [Field Content Cells](#field-content-cells)
@@ -79,7 +80,7 @@ Note the column `fieldContentID`. The cell containing field contents are also ID
 
 The data in this cell is stored as a `mxUINT8` data element. However, the actual data consists of a combination of `uint8` values and `uint32` values, and must be parsed as raw data. The contents consist of a large series of different types of metadata, ordered as follows:
 
-- `Header`: 32-bit integer with unknown significance
+- `Header`: 32-bit integer with unknown significance. It's value is always `4`
 - `num_fields_classes`: 32-bit integer indicating the total number of unique fields and classes of all objects in the MAT-file
 - `offsets`: A list of **eight** 32-bit integers, which are byte markers to different regions within this cell. The byte marker is relative to the start of the cell's data
 - `names`: A list of null-terminated `int8` strings indicating all field and class names (in no particular order)
@@ -88,22 +89,26 @@ The data in this cell is stored as a `mxUINT8` data element. However, the actual
 #### Region 1: Class Identifier Metadata
 
 - The start of this region is indicated by the first offset value
-- This region consists of blocks of **four** 32-bit integers in the format `(0, class_name_index, 0, 0)`
+- This region consists of blocks of **four** 32-bit integers in the format `(handle_class_name_index, class_name_index, 0, 0)`
 - The value `class_name_index` points to the class name in the list `names` obtained above
+- The value `handle_class_name_index` points to the handle class name in the list of `names` obtained above. For more information, see [handle classes](field_contents.md/#handle-classes)
 - The first block is always all zeros
 - The blocks are ordered by `classID`
 
 #### Region 3: Object Identifier Metadata
 
 - The start of this region is indicated by the third offset value
-- This region consists of blocks of **six** 32-bit integers in the format `(classID, 0, 0, type1_ID, type2_ID, objectID)`
+- This region consists of blocks of **six** 32-bit integers in the format `(classID, 0, 0, type1_ID, type2_ID, object_dependency_id)`
 - These blocks are ordered by `objectID`
 - The first block is always all zeros
-- `classID` and `objectID` are the same values assigned to the object array in the normal MAT-file
+- `classID` is the same values assigned to the object array in the normal MAT-file
+- `object_dependency_id` is used to identify nested objects. The value in this field indicates the `object_id` **upto** which it depends on.
 - `type1ID` and `type2ID` are linked to different types of objects. For example, `string` is a `type1` object, whereas `datetime` is a `type2` object
 - Each `type1` and `type2` object is assigned a unique ID, in order of `objectID`, starting from zero
 
 #### Region 2: Type 1 Object Metadata
+
+This region stores field contents for classes using the `any` property.
 
 - The start of this region is indicated by the second offset value
 - This region consists of blocks of 32-bit integers, in order of `type1_id`
@@ -111,17 +116,33 @@ The data in this cell is stored as a `mxUINT8` data element. However, the actual
 - The first block is always all zeros
 - The size of each block is determined by the first 32-bit integer.
 - The first 32-bit integer indicates the number of sub-blocks for each block
-- Each sub-block is of the format `(field_name_index, 1, fieldContentID)`
-- The value `field_name_index` points to the field name in the list `names` obtained above
-- The value `fieldContentID` points to the index of the cell array containing the contents of this field
+- Each sub-block is of the format `(field_name_index, field_type, field_value)`
+  - The value `field_name_index` points to the field name in the list `names` obtained above
+  - `field_type` indicates whether the field is a property or an attribute
+    - `field_type = 1` indicates a property
+    - `field_type = 2` indicates an attribute like `Hidden` or `Constant`, etc.
+  - `field_value` depends on `field_type`
+    - If `field_type = 1`, `field_value` contains the index of the cell array containing the property contents
+    - If `field_type = 2`, `field_value` contains a logical value, i.e., either `true` or `false`
 
 #### Region 4: Type 2 Object Metadata
 
 This region is structured exactly the same as _Region 2_, but is for Type 2 objects. The start of this region is indicated by the fourth offset value.
 
+#### Region 5: Handle Class Metadata
+
+This region links objects to its corresponding handle superclass objects.
+
+- The start of thisregion is indicated by the fifth offset value
+- This region consists of blocks of 32-bit integers, in order of `object_id`
+- Each block is of the form `(num_handle_properties, handle_id_1, handle_id_2 ...., handle_id_N)`
+CHECK WHAT TYPE OF ID IT IS
+- Each block is padded to 8 byte boundary
+- The first block is all zeros
+
 #### Other Regions
 
-The 5th, 6th and 7th offset values indicate other metadata regions whose purpose is unknown. The last offset points to the end of this cell.
+The 6th and 7th offset values indicate other metadata regions whose purpose is unknown. The last offset points to the end of this cell.
 
 ### Cell 2 - Padding
 
@@ -133,11 +154,11 @@ Field contents are stored from Cell 3 onwards. The data element used to store fi
 
 ### Remaining Cells
 
-There are always three more cells at the end of the array, which appear after all the field content cells. The purpose of these cells is partially unknown. It is highly likely that these contain some kind of metadata for user-defined objects, which needs to be studied further.
+There are always three more cells at the end of the array, which appear after all the field content cells. These cells contain some data related to each class. The purpose of these cells is partially unknown.
 
-For MATLAB datatypes implemented as classes, such as `datetime`, `table`, and `string`, they are typically empty cells, except for one. The very last cell of this cell array contains a list of all properties with the default values they are initialized with.
-
-The contents of this cell is another cell array itself, with the dimensions `(n_classes + 1, 1)`. Each cell is written in place as a `struct`. The purpose of the first cell is unknown. The second cell onwards contains the default values of the properties of a class, ordered by `class_id`. These properties are written in place as the fields of the struct array, where the field names are the property names, and the field contents are the default values of the corresponding property.
+- Cell[-3] is a cell array of `(num_classes + 1, 1)` dimensions, in order of `class_id`. Each cell is written in place as a struct. The contents of this struct is unknown, and is usually empty. The first cell is always an empty struct array.
+- Cell[-1] has the same format as Cell[-3]. This cell contains a list of default property values assigned within the class. The fields of each struct are the property names, and the field contents correspond to the default property values.
+- Cell[-2] is instead a `mxINT32` array of `(num_classes + 1, 1)` dimensions, in order of `class_id`. The first integer is always zero. Its purpose is unknown, and is usually all zeros. Modifying these values does not seem to affect reading/writing of MAT-files.
 
 ## Data Element 2: Character Array
 
