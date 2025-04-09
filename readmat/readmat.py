@@ -323,15 +323,20 @@ class SubsystemReader:
         while nfields > 0:
             # Extract field name
             data = self.ssdata.read(12)
-            field_index, _, field_content_index = struct.unpack(
+            field_index, field_type, field_value = struct.unpack(
                 self.byte_order + "3I", data
             )
             field_name = self.names[field_index - 1]
             curPos = self.ssdata.tell()
 
+            if field_type == 2:  # Logical Attribute
+                obj_fields[field_name] = field_value
+                nfields -= 1
+                continue
+
             # Extract contents from field name
             self.ssdata.seek(
-                self._cell_pos[field_content_index + 2]
+                self._cell_pos[field_value + 2]
             )  # adding two since array includes Cell 1 and Cell 2
             data = self.ssdata.read(8)
             _, nbytes = struct.unpack(self.byte_order + "II", data)
@@ -389,6 +394,33 @@ class SubsystemReader:
         return obj_array
 
 
+def get_object_metadata(data: np.ndarray) -> Tuple[List[int], int]:
+    """Extracts object ID from the data array"""
+
+    # Extract the object ID from the metadata
+    metadata = data[0]["object_metadata"]
+    if metadata.dtype == np.uint32:
+        ref = metadata[0, 0]
+        if ref != 0xDD000000:
+            raise ValueError("Invalid object reference")
+        ndims = metadata[1, 0]
+        dims = metadata[2 : 2 + ndims, 0]
+        object_id = metadata[-2, 0]
+
+    elif metadata.dtype.fields is not None:
+        if "EnumerationInstanceTag" in metadata.dtype.fields:
+            raise TypeError("EnumerationInstances is not supported currently")
+        else:
+            raise TypeError(
+                "Unknown metadata format. Please raise issue with developers"
+            )
+
+    else:
+        raise TypeError("Unknown metadata format. Please raise issue with developers")
+
+    return dims, object_id
+
+
 def load_from_mat(file_path: str, raw_data: bool = False) -> Dict[str, Any]:
     """Reads data from file path and returns all data"""
 
@@ -408,11 +440,7 @@ def load_from_mat(file_path: str, raw_data: bool = False) -> Dict[str, Any]:
         if data.dtype != OPAQUE_DTYPE:
             continue
 
-        object_id = data["object_id"].item()
-        ndims = data["n_dims"].item()
-        dims = data["dims"].item()
-        if ndims == 0:
-            continue
+        dims, object_id = get_object_metadata(data)
 
         # Read all objects in array
         obj_array = SR.read_object_arrays(object_id, dims)
