@@ -136,7 +136,7 @@ class SubsystemReader:
         dims = struct.unpack(self.byte_order + "I" * (ndims // 4), data)
         if ndims // 4 > 2 or dims[1] != 1:
             raise ValueError(
-                "Invalid dimensions for default fields. Expected Nx1 array."
+                "Invalid dimensions for default fields. Expected Nx1 array. Got {dims}"
             )
 
         self.ssdata.seek(ndims % 8, 1)  # Padding to 8 byte boundary
@@ -418,7 +418,9 @@ class SubsystemReader:
                 -1,
             )
             if obj_id == -1:
-                raise ValueError(f"Object ID {handle_id} not found in handle_type1_ids")
+                raise ValueError(
+                    f"Object ID {handle_id} not found as Handle Class Instance"
+                )
 
             class_id, _, _, _ = self.get_object_dependencies(obj_id)
             handle_class_name, class_name = self.get_class_name(class_id)
@@ -464,31 +466,88 @@ class SubsystemReader:
         return obj_array
 
 
-def get_object_metadata(data: np.ndarray) -> Tuple[List[int], int]:
+def get_object_reference(metadata):
+    """Extracts object ID from the data array"""
+    ref = metadata[0, 0]
+    if ref != 0xDD000000:
+        raise ValueError("Invalid object reference. Expected 0xDD000000. Got {ref}")
+    ndims = metadata[1, 0]
+    dims = metadata[2 : 2 + ndims, 0]
+    object_id = metadata[-2, 0]
+
+    return object_id, dims
+
+
+def load_normal_object(metadata: np.ndarray, SR: SubsystemReader) -> np.ndarray:
+    """Extracts objects from subsystem using object metadata"""
+    object_id, dims = get_object_reference(metadata)
+    obj_array = SR.read_object_arrays(object_id, dims)
+    if obj_array.size == 0:
+        return np.array([])
+    return obj_array
+
+
+def load_enumeration_object(
+    metadata: np.ndarray, SR: SubsystemReader
+) -> Dict[str, Any]:
+    """Extracts enumeration instance from subsystem using object metadata"""
+    ref = metadata[0, 0]["EnumerationInstanceTag"]
+    if ref != 0xDD000000:
+        raise ValueError("Invalid object reference. Expected 0xDD000000. Got {ref}")
+
+    class_index = metadata[0, 0]["ClassName"].item()
+    _, class_name = SR.get_class_name(class_index)
+    builtin_class_index = metadata[0, 0]["BuiltinClassName"].item()
+    if builtin_class_index != 0:
+        _, builtin_class_name = SR.get_class_name(builtin_class_index)
+    else:
+        builtin_class_name = None
+
+    value_name_idx = metadata[0, 0]["ValueNames"]
+    value_names = [SR.names[val - 1] for val in value_name_idx.flat]
+
+    # Extract the enumeration values
+    value_idx = metadata[0, 0]["ValueIndices"]
+
+    enum_array = []
+    for val in value_idx.flat:
+        mmdata = metadata[0, 0]["Values"]
+        if mmdata.size == 0:
+            obj_array = np.array([])
+        else:
+            obj_array = load_normal_object(mmdata[val, 0], SR)
+
+        obj_dict = {value_names[val]: obj_array}
+        enum_array.append(obj_dict)
+
+    enum_array = np.array(enum_array).reshape(value_idx.shape)
+    enum_dict = {
+        "__class_name__": class_name,
+        "__builtin_class_name__": (
+            builtin_class_name if builtin_class_name is not None else ""
+        ),
+        "__fields__": enum_array,
+    }
+
+    return enum_dict
+
+
+def check_object_type(metadata: np.ndarray) -> int:
     """Extracts object ID from the data array"""
 
-    # Extract the object ID from the metadata
-    metadata = data[0]["object_metadata"]
     if metadata.dtype == np.uint32:
-        ref = metadata[0, 0]
-        if ref != 0xDD000000:
-            raise ValueError("Invalid object reference")
-        ndims = metadata[1, 0]
-        dims = metadata[2 : 2 + ndims, 0]
-        object_id = metadata[-2, 0]
+        obj_type = 1
 
     elif metadata.dtype.fields is not None:
         if "EnumerationInstanceTag" in metadata.dtype.fields:
-            raise TypeError("EnumerationInstances is not supported currently")
+            obj_type = 2
         else:
-            raise TypeError(
-                "Unknown metadata format. Please raise issue with developers"
-            )
+            raise TypeError("Unknown metadata format {metadata.dtype}")
 
     else:
-        raise TypeError("Unknown metadata format. Please raise issue with developers")
+        raise TypeError("Unknown metadata format {metadata}")
 
-    return dims, object_id
+    return obj_type
 
 
 def load_from_mat(file_path: str, raw_data: bool = False) -> Dict[str, Any]:
@@ -510,10 +569,13 @@ def load_from_mat(file_path: str, raw_data: bool = False) -> Dict[str, Any]:
         if data.dtype != OPAQUE_DTYPE:
             continue
 
-        dims, object_id = get_object_metadata(data)
+        metadata = data[0]["object_metadata"]
+        obj_type = check_object_type(metadata)
+        if obj_type == 1:
+            obj_array = load_normal_object(metadata, SR)
+        elif obj_type == 2:
+            obj_array = load_enumeration_object(metadata, SR)
 
-        # Read all objects in array
-        obj_array = SR.read_object_arrays(object_id, dims)
         mdict[var] = obj_array
 
     return mdict
