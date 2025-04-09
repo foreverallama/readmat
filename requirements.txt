@@ -1,3 +1,4 @@
 scipy>=1.16.0
 numpy>=2.2.2
 pytz
+pandas>=2.2.0

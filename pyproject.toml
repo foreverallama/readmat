@@ -12,7 +12,8 @@ requires-python = ">=3.6"
 dependencies = [
     "scipy>=1.15.0",
     "numpy>=2.2.2",
-    "pytz"
+    "pytz",
+    "pandas>=2.2.0",
 ]
 
 [tool.setuptools]
