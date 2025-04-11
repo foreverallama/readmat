@@ -1,52 +1,87 @@
+import warnings
 from io import BytesIO
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
 from scipy.io import loadmat
+from scipy.io.matlab._mio5 import MatFile5Reader
 from scipy.io.matlab._mio5_params import OPAQUE_DTYPE
 
-from .subsystem import SubsystemReader
+from .subsystem import FileWrapper
 
 
-def get_object_reference(metadata: np.ndarray) -> Tuple[int, List[int]]:
+def get_object_reference(metadata: np.ndarray) -> Tuple[int, int, List[int]]:
     """Extracts object ID from the data array"""
     ref = metadata[0, 0]
     if ref != 0xDD000000:
         raise ValueError("Invalid object reference. Expected 0xDD000000. Got {ref}")
+
     ndims = metadata[1, 0]
     dims = metadata[2 : 2 + ndims, 0]
+    if len(dims) != ndims:
+        raise ValueError("Invalid dimensions. Expected {ndims}. Got {dims}")
+
     object_id = metadata[-2, 0]
+    class_id = metadata[-1, 0]
 
-    return object_id, dims
-
-
-def load_normal_object(metadata: np.ndarray, SR: SubsystemReader) -> np.ndarray:
-    """Extracts objects from subsystem using object metadata"""
-    object_id, dims = get_object_reference(metadata)
-    obj_array = SR.read_object_arrays(object_id, dims)
-    if obj_array.size == 0:
-        return np.array([])
-    return obj_array
+    return object_id, class_id, dims
 
 
-def load_enumeration_object(
-    metadata: np.ndarray, SR: SubsystemReader
-) -> Dict[str, Any]:
+def get_matfile_version(ssStream: BytesIO) -> Tuple[int, int, str]:
+    """Reads subsystem byte order"""
+
+    ssStream.seek(0)
+    data = ssStream.read(4)
+    ssStream.seek(0)
+    maj_ind = int(data[2] == b"I"[0])
+    v_major = int(data[maj_ind])
+    v_minor = int(data[1 - maj_ind])
+    byte_order = "<" if data[2] == b"I"[0] else ">"
+    if v_major in (1, 2):
+        return v_major, v_minor, byte_order
+
+    raise ValueError(
+        "Unknown subsystem data type, version {}, {}".format(v_major, v_minor)
+    )
+
+
+def read_subsystem(ssStream: BytesIO) -> Tuple[np.ndarray, str]:
+    """Reads subsystem data"""
+
+    mjv, mnv, byte_order = get_matfile_version(ssStream)
+    if mjv != 1:
+        raise NotImplementedError(f"Subsystem version {mjv}.{mnv} not supported")
+
+    ssStream.seek(8)  # Skip subsystem header
+    MR = MatFile5Reader(ssStream, byte_order=byte_order)
+    MR.initialize_read()
+    hdr, _ = MR.read_var_header()
+    try:
+        res = MR.read_var_array(hdr, process=True)
+    except Exception as err:
+        raise ValueError(f"Error reading subsystem data: {err}")
+
+    return res, byte_order
+
+
+def load_enumeration_object(metadata: np.ndarray, fwrap: FileWrapper) -> np.ndarray:
     """Extracts enumeration instance from subsystem using object metadata"""
+
     ref = metadata[0, 0]["EnumerationInstanceTag"]
     if ref != 0xDD000000:
         raise ValueError("Invalid object reference. Expected 0xDD000000. Got {ref}")
 
-    class_index = metadata[0, 0]["ClassName"].item()
-    _, class_name = SR.get_class_name(class_index)
+    class_idx = metadata[0, 0]["ClassName"].item()
+    class_name = fwrap.names[class_idx - 1]
     builtin_class_index = metadata[0, 0]["BuiltinClassName"].item()
     if builtin_class_index != 0:
-        _, builtin_class_name = SR.get_class_name(builtin_class_index)
+        builtin_class_name = fwrap.names[builtin_class_index - 1]
     else:
         builtin_class_name = None
 
     value_name_idx = metadata[0, 0]["ValueNames"]
-    value_names = [SR.names[val - 1] for val in value_name_idx.flat]
+    value_names = [fwrap.names[val - 1] for val in value_name_idx.flat]
+    value_names = np.array(value_names).reshape(value_name_idx.shape)
 
     # Extract the enumeration values
     value_idx = metadata[0, 0]["ValueIndices"]
@@ -57,87 +92,93 @@ def load_enumeration_object(
         if mmdata.size == 0:
             obj_array = np.array([])
         else:
-            obj_array = load_normal_object(mmdata[val, 0], SR)
-
-        obj_dict = {value_names[val]: obj_array}
-        enum_array.append(obj_dict)
+            obj_array = load_MCOS_object(mmdata[val, 0], fwrap)
+        enum_array.append(obj_array)
 
     enum_array = np.array(enum_array).reshape(value_idx.shape)
-    enum_dict = {
-        "__class_name__": class_name,
-        "__builtin_class_name__": (
-            builtin_class_name if builtin_class_name is not None else ""
-        ),
-        "__fields__": enum_array,
-    }
 
-    return enum_dict
+    metadata[0, 0]["ValueNames"] = value_names
+    metadata[0, 0]["Values"] = enum_array
+    metadata[0, 0]["ClassName"] = class_name
+    metadata[0, 0]["BuiltinClassName"] = builtin_class_name
+
+    return metadata
 
 
-def check_object_type(metadata: np.ndarray) -> int:
+def load_MCOS_object(metadata: np.ndarray, fwrap: FileWrapper) -> np.ndarray:
+    object_id, class_id, dims = get_object_reference(metadata)
+    obj_array = fwrap.read_object_arrays(object_id, class_id, dims)
+    if obj_array.size == 0:
+        return np.array([])
+    return obj_array
+
+
+def check_object_type(mm: np.ndarray) -> int:
     """Extracts object ID from the data array"""
 
-    if metadata.dtype == np.uint32:
+    if mm.dtype == np.uint32:
         obj_type = 1
 
-    elif metadata.dtype.fields is not None:
-        if "EnumerationInstanceTag" in metadata.dtype.fields:
+    elif mm.dtype.fields is not None:
+        if "EnumerationInstanceTag" in mm.dtype.fields:
             obj_type = 2
         else:
-            raise TypeError("Unknown metadata format {metadata.dtype}")
+            raise TypeError("Unknown metadata type {mm.dtype}")
+
+    elif mm.dtype == np.uint8:
+        obj_type = 3  # Possible Java object
 
     else:
-        raise TypeError("Unknown metadata format {metadata}")
+        raise TypeError("Unknown metadata format {mm}")
 
     return obj_type
 
 
 def load_from_mat(file_path: str, raw_data: bool = False) -> Dict[str, Any]:
-    """Reads data from file path and returns all data"""
-
     mdict = loadmat(file_path)
     ssdata = mdict.pop("__function_workspace__", None)
     if ssdata is None:
         print("No subsystem data found in the file.")
         return mdict
 
-    ssdata = BytesIO(ssdata)
-    SR = SubsystemReader(ssdata, raw_data)
+    ssStream = BytesIO(ssdata)
+    res, byte_order = read_subsystem(ssStream)
+    ss_fields = res[0, 0].dtype.fields
+    if "MCOS" in ss_fields:
+        fwrap = FileWrapper(
+            res[0, 0]["MCOS"][()]["__object_metadata__"], byte_order, raw_data
+        )
+
+    if "java" in ss_fields:
+        warnings.warn(
+            "Java object found in the file. These are not supported yet.", UserWarning
+        )
 
     for var, data in mdict.items():
+        # Skip mdict headers
         if not isinstance(data, np.ndarray):
             continue
 
+        # Skip non opaque data
         if data.dtype != OPAQUE_DTYPE:
             continue
 
-        metadata = data[0]["object_metadata"]
+        metadata = data[()]["__object_metadata__"]
         obj_type = check_object_type(metadata)
         if obj_type == 1:
-            obj_array = load_normal_object(metadata, SR)
+            obj_array = load_MCOS_object(metadata, fwrap)
         elif obj_type == 2:
-            obj_array = load_enumeration_object(metadata, SR)
+            obj_array = load_enumeration_object(metadata, fwrap)
+        elif obj_type == 3:
+            # obj_array = load_java_object(metadata, res[0,0]['Java'], byte_order, raw_data)
+            continue
+        else:
+            warnings.warn(
+                f"Unknown object type {obj_type} for variable {var}. Skipping.",
+                UserWarning,
+            )
+            continue
 
         mdict[var] = obj_array
 
     return mdict
-
-
-def read_subsystem_data_legacy(
-    file_path: str, raw_data: bool = False
-) -> Dict[str, Any]:
-    """Reads subsystem data from file path and returns list of objects by their object IDs
-    Legacy implementation based on stable scipy.io.loadmat release
-    """
-    mdict = loadmat(file_path)
-    data_reference = mdict["None"]
-    var_name = data_reference["s0"][0].decode("utf-8")
-    object_id = data_reference["arr"][0][4][0]
-    ndims = data_reference["arr"][0][1][0]
-    dims = [data_reference["arr"][0][2 + i][0] for i in range(ndims)]
-
-    ssdata = BytesIO(mdict["__function_workspace__"])
-    SR = SubsystemReader(ssdata, raw_data)
-    obj_dict = SR.read_object_arrays(object_id, dims)
-    obj_dict[var_name] = obj_dict.pop(object_id)
-    return obj_dict

@@ -1,18 +1,15 @@
 diff --git a/scipy/io/matlab/_mio5_params.py b/scipy/io/matlab/_mio5_params.py
-index 0d60b8e7a..dc8a99040 100644
+index 0d60b8e7a..1b0f5a90e 100644
 --- a/scipy/io/matlab/_mio5_params.py
 +++ b/scipy/io/matlab/_mio5_params.py
-@@ -277,5 +277,6 @@ class MatlabOpaque(np.ndarray):
-         return obj
+@@ -278,4 +278,4 @@ class MatlabOpaque(np.ndarray):
  
  
--OPAQUE_DTYPE = np.dtype(
+ OPAQUE_DTYPE = np.dtype(
 -    [('s0', 'O'), ('s1', 'O'), ('s2', 'O'), ('arr', 'O')])
-+OPAQUE_DTYPE = np.dtype([
-+    ('object_metadata',object)
-+])
++    [('__object_metadata__', 'O')])
 diff --git a/scipy/io/matlab/_mio5_utils.pyx b/scipy/io/matlab/_mio5_utils.pyx
-index b7abd7104..cec1a6789 100644
+index b7abd7104..6195aa5a5 100644
 --- a/scipy/io/matlab/_mio5_utils.pyx
 +++ b/scipy/io/matlab/_mio5_utils.pyx
 @@ -596,8 +596,9 @@ cdef class VarReader5:
@@ -36,7 +33,7 @@ index b7abd7104..cec1a6789 100644
              process = 0
          # ensure we have read checksum.
          read_ok = self.cstream.all_data_read()
-@@ -984,10 +983,8 @@ cdef class VarReader5:
+@@ -984,10 +983,6 @@ cdef class VarReader5:
          # Neither res nor the return value of this function are cdef'd as
          # cnp.ndarray, because that only adds useless checks with current
          # Cython (0.23.4).
@@ -46,8 +43,7 @@ index b7abd7104..cec1a6789 100644
 -        res0['s1'] = self.read_int8_string()
 -        res0['s2'] = self.read_int8_string()
 -        res0['arr'] = self.read_mi_matrix()
+-        return res
 +
-+        obj_metadata = self.read_mi_matrix()
-+        res = np.empty(1, dtype=OPAQUE_DTYPE)
-+        res['object_metadata'][0] = obj_metadata
-         return res
++        res = self.read_mi_matrix()
++        return np.array((res,), dtype=OPAQUE_DTYPE)

@@ -1,217 +1,141 @@
-import struct
-from io import BytesIO
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
-from scipy.io.matlab._mio5 import MatFile5Reader
 
-from .class_parser import convert_to_object
+CLASS_DTYPE = [
+    ("__class__", "O"),
+    ("__properties__", "O"),
+    ("__handles__", "O"),
+    ("__default_properties__", "O"),
+    ("__s3__", "O"),
+    ("__s2__", "O"),
+]
 
 
-class SubsystemReader:
-    def __init__(self, ssdata: BytesIO, raw_data: bool = False) -> None:
-        self.ssdata: BytesIO = ssdata
-        self._cell_pos: List[int] = []
-        self.names: List[str] = []
-        self.class_names: List[Tuple[Optional[str], str]] = []
-        self._unique_objects: List[Tuple[int, int, int, int]] = []
-        self._offsets: List[int] = []
-        self._default_fields_pos: List[int] = []
-        self.raw_data: bool = raw_data
-        self.byte_order: str = self._read_byte_order()
-
-        self._initialize_subsystem()
-
-    def _read_byte_order(self) -> str:
-        """Reads subsystem byte order"""
-
-        self.ssdata.seek(2)
-        data = self.ssdata.read(2)
-        byte_order = "<" if data == b"IM" else ">"
-        return byte_order
-
-    def _read_field_content_ids(self) -> None:
-        """Gets field content byte markers"""
-
-        data = self.ssdata.read(
-            8
-        )  # Reads the miMATRIX Header of mxOPAQUE_CLASS metadata
-        _, nbytes = struct.unpack(self.byte_order + "II", data)
-        endPos = self.ssdata.tell() + nbytes
-
-        self.ssdata.seek(40, 1)  # Discard variable headers
-        while self.ssdata.tell() < endPos:
-            self._cell_pos.append(self.ssdata.tell())
-            data = self.ssdata.read(8)
-            _, nbytes = struct.unpack(self.byte_order + "II", data)
-            self.ssdata.seek(nbytes, 1)
-
-    def _read_names_len(self) -> int:
-        """Gets the length of the names"""
-
-        data = self.ssdata.read(8)
-        _, fc_len = struct.unpack(self.byte_order + "II", data)
-
-        return fc_len
-
-    def _read_region_offsets(self, cell1_start: int) -> List[int]:
-        """Gets byte markers for region offsets"""
-
-        data = self.ssdata.read(32)
-        offsets_t = struct.unpack(self.byte_order + "8I", data)
-        offsets = [offset + cell1_start for offset in offsets_t]
-
-        return offsets
-
-    def _read_class_names(self, fc_len: int, regionStart: int, regionEnd: int) -> None:
-        """Parses Region 1 to extract class names"""
-
-        # Get table of contents
-        nbytes = regionStart - self.ssdata.tell()  # This block ends at offsets
-        data = self.ssdata.read(nbytes)
-        self.names = [s.decode("utf-8") for s in data.split(b"\x00") if s]
-
-        # Extracting the class names
-        self.ssdata.seek(regionStart)
-        self.ssdata.seek(16, 1)  # Discard first val
-        while self.ssdata.tell() < regionEnd:
-            data = self.ssdata.read(16)
-            handle_class_name_index, class_index, _, _ = struct.unpack(
-                self.byte_order + "4I", data
-            )
-            handle_class_name = (
-                self.names[handle_class_name_index - 1]
-                if handle_class_name_index > 0
-                else None
-            )
-            class_name = self.names[class_index - 1]
-            self.class_names.append(
-                (handle_class_name, class_name)
-            )  # This list is ordered by class_id
-
-    def _read_object_types(self, regionStart: int, regionEnd: int) -> None:
-        """Parses Region 3 to extract object dependency IDs"""
-
-        self.ssdata.seek(regionStart)
-        self.ssdata.seek(24, 1)  # Discard first val which is all zeros
-
-        while self.ssdata.tell() < regionEnd:
-            data = self.ssdata.read(24)
-            class_id, _, _, type1_id, type2_id, dep_id = struct.unpack(
-                self.byte_order + "6I", data
-            )
-            self._unique_objects.append(
-                (class_id, type1_id, type2_id, dep_id)
-            )  # This list is ordered by object_id
-
-    def _get_handle_pos(self, obj_dep_id: int) -> None:
-        """Moves the file pointer to the handle object position"""
-
-        self.ssdata.seek(self._offsets[4])  # Region 5
-        self.ssdata.seek(8, 1)  # Discard first block
-
-        while obj_dep_id - 1 > 0:
-            # first integer gives number of handle objects
-            data = self.ssdata.read(4)
-            nhandles = struct.unpack(self.byte_order + "I", data)[0]
-
-            # each handle represented by 4 byte integer
-            nbytes = nhandles * 4
-            nbytes = nbytes + ((nbytes + 4) % 8)
-            self.ssdata.seek(nbytes, 1)
-            obj_dep_id -= 1
-
-    def _get_default_field_pos(self) -> None:
-        """Gets the byte markers for arrays containing default property values of an object"""
-
-        self.ssdata.seek(self._cell_pos[-1])  # Last Cell
-        self.ssdata.seek(8, 1)  # Reads the miMATRIX Header
-        self.ssdata.seek(16, 1)  # Skip Array Flags
-
-        data = self.ssdata.read(8)  # Reads dimensions flag of cell array
-        _, ndims = struct.unpack(self.byte_order + "II", data)
-        data = self.ssdata.read(ndims)
-        dims = struct.unpack(self.byte_order + "I" * (ndims // 4), data)
-        if ndims // 4 > 2 or dims[1] != 1:
-            raise ValueError(
-                "Invalid dimensions for default fields. Expected Nx1 array. Got {dims}"
-            )
-
-        self.ssdata.seek(ndims % 8, 1)  # Padding to 8 byte boundary
-        self.ssdata.seek(8, 1)  # Skip variable name
-
-        for i in range(0, dims[0]):
-            data = self.ssdata.read(8)  # Reads the miMATRIX Header
-            _, nbytes = struct.unpack(self.byte_order + "II", data)
-            self._default_fields_pos.append(
-                self.ssdata.tell() - 8
-            )  # Extract struct array pos
-            self.ssdata.seek(nbytes, 1)
-
-        self._default_fields_pos = self._default_fields_pos[
-            1:
-        ]  # First struct is ignored
-
-    def _initialize_subsystem(self) -> None:
-        """parses the subsystem data and and links different parts of metadata"""
-        self.ssdata.seek(144)  # discard headers
-
-        self._read_field_content_ids()
-
-        # Parsing Cell 1
-        self.ssdata.seek(self._cell_pos[0])
-        self.ssdata.seek(8, 1)  # Discard miMATRIX Header
-        self.ssdata.seek(48, 1)  # Discard Variable Header
-
-        # Extracting metadata offset byte markers
-        cell1_start = self.ssdata.tell()
-        fc_len = self._read_names_len()
-        self._offsets = self._read_region_offsets(cell1_start)
-
-        self._read_class_names(
-            fc_len, regionStart=self._offsets[0], regionEnd=self._offsets[1]
-        )
-        self._read_object_types(
-            regionStart=self._offsets[2], regionEnd=self._offsets[3]
-        )
-        self._get_default_field_pos()
-
-    def get_object_dependencies(self, object_id: int) -> Tuple[int, int, int, int]:
-        """Get the object dependencies for a given object ID"""
-
-        return self._unique_objects[object_id - 1]
-
-    def get_class_name(self, class_id: int) -> Tuple[Any | None, Any]:
-        """Get the class name for a given class ID"""
-
-        return self.class_names[class_id - 1]
+class FileWrapper:
+    def __init__(
+        self, ssdata: np.ndarray, byte_order: str, raw_data: bool = False
+    ) -> None:
+        self.ssdata = ssdata
+        self.byte_order = "<u4" if byte_order == "<" else ">u4"
+        self.raw_data = raw_data
+        self.names = self.get_field_names()
 
     def check_object_reference(self, res: Any) -> bool:
         """Checks if the field content is a reference to another object"""
         if not isinstance(res, np.ndarray):
             return False
-
         if res.dtype != np.uint32:
             return False
-
         if res.shape[0] < 6:
             return False
 
         ref_value = res[0, 0]
         ndims = res[1, 0]
         shapes = res[2 : 2 + ndims, 0]
-
         if ref_value != 0xDD000000:
             return False
-
         if ndims <= 1 or len(shapes) != ndims:
             return False
 
         # # * Need to study condition with more examples
         # if np.count_nonzero(shapes != 1) > 1:  # At most 1 dimension can have size > 1
         #     return False
-
         return True
+
+    def get_object_dependencies(self, object_id: int) -> Tuple[int, int, int, int]:
+        """Reads object dependencies for a given object
+        For e.g. if the property of an object is another object"""
+
+        byte_offset = np.frombuffer(
+            self.ssdata[0, 0][16:20].tobytes(), dtype=self.byte_order
+        )[0]
+        byte_offset = byte_offset + object_id * 24
+        class_id, _, _, type1_id, type2_id, dep_id = np.frombuffer(
+            self.ssdata[0, 0][byte_offset : byte_offset + 24].tobytes(),
+            dtype=self.byte_order,
+        )
+
+        return class_id, type1_id, type2_id, dep_id
+
+    def get_field_names(self) -> List[str]:
+        """Reads class name for a given object
+        For e.g. if the property of an object is another object"""
+
+        byte_end = np.frombuffer(
+            self.ssdata[0, 0][8:12].tobytes(), dtype=self.byte_order
+        )[0]
+        data = self.ssdata[0, 0][40:byte_end].tobytes()
+        raw_strings = data.split(b"\x00")
+        all_names = [s.decode("ascii") for s in raw_strings if s]
+        return all_names
+
+    def get_class_name(self, class_id: int) -> Tuple[Optional[str], str]:
+        """Reads class name for a given object
+        For e.g. if the property of an object is another object"""
+
+        byte_offset = np.frombuffer(
+            self.ssdata[0, 0][8:12].tobytes(), dtype=self.byte_order
+        )[0]
+        byte_offset = byte_offset + class_id * 16
+
+        handle_idx, class_idx, _, _ = np.frombuffer(
+            self.ssdata[0, 0][byte_offset : byte_offset + 16].tobytes(),
+            dtype=self.byte_order,
+        )
+
+        class_name = self.names[class_idx - 1]
+        handle_name = self.names[handle_idx - 1] if handle_idx > 0 else None
+        return handle_name, class_name
+
+    def get_ids(self, id: int, byte_offset: int, nbytes: int) -> np.ndarray:
+        """Reads ids for a given object
+        For e.g. if the property of an object is another object"""
+
+        # Get block corresponding to type ID
+        while id > 0:
+            nblocks = np.frombuffer(
+                self.ssdata[0, 0][byte_offset : byte_offset + 4].tobytes(),
+                dtype=self.byte_order,
+            )[0]
+            byte_offset = byte_offset + 4 + nblocks * nbytes
+            if ((nblocks * nbytes) + 4) % 8 != 0:
+                byte_offset += 4
+            id -= 1
+
+        # Get the number of blocks
+        nblocks = np.frombuffer(
+            self.ssdata[0, 0][byte_offset : byte_offset + 4].tobytes(),
+            dtype=self.byte_order,
+        )[0]
+
+        byte_offset += 4
+
+        ids = np.frombuffer(
+            self.ssdata[0, 0][byte_offset : byte_offset + nblocks * nbytes].tobytes(),
+            dtype=self.byte_order,
+        )
+
+        return ids.reshape((nblocks, nbytes // 4))
+
+    def get_handle_class_instance(self, type2_id: int) -> Tuple[int, int]:
+        """Reads handle class instance for a given object
+        For e.g. if the property of an object is another object"""
+
+        start, end = np.frombuffer(
+            self.ssdata[0, 0][16:24].tobytes(), dtype=self.byte_order
+        )
+        blocks = np.frombuffer(
+            self.ssdata[0, 0][start:end].tobytes(), dtype=self.byte_order
+        ).reshape(-1, 6)
+
+        for block in blocks:
+            if block[4] == type2_id:
+                class_id = block[0]
+                object_id = block[5]
+                return class_id, object_id
+
+        raise ValueError(f"Handle class instance not found for type2_id: {type2_id}")
 
     def process_res_array(self, arr: Any) -> Any:
         """Iteratively check if result is an object reference and extract data"""
@@ -244,219 +168,122 @@ class SubsystemReader:
             return result
 
         if self.check_object_reference(arr):
-            object_id = arr[-2, 0].item()
             ndims = arr[1, 0].item()
             dims = arr[2 : 2 + ndims, 0]
-            return self.read_object_arrays(object_id, dims)
+            object_id = arr[-2, 0].item()
+            class_id = arr[-1, 0].item()
+            return self.read_object_arrays(object_id, class_id, dims)
 
         return arr
 
-    def read_miMATRIX(self, MR: MatFile5Reader) -> Any:
-        """Wrapper function around the get_variables() of scipy.io.matlab MatFile5Reader class."""
-
-        MR.byte_order = self.byte_order
-        MR.mat_stream.seek(0)
-        MR.initialize_read()
-        while not MR.end_of_stream():
-            hdr, _ = MR.read_var_header()
-            try:
-                res = MR.read_var_array(hdr, process=True)
-            except Exception as e:
-                err = f"Read error: {e}"
-                print(err)
-
-            res = self.process_res_array(res)
-
-        return res
-
-    def read_mat_data(self, mat_data: bytes) -> Any:
-        """Read the data from the mat file. Wrapper around scipy.io.matlab MatFile5Reader class."""
-
-        byte_stream = BytesIO(mat_data)
-        MR = MatFile5Reader(byte_stream)
-        res = self.read_miMATRIX(MR)
-        return res
-
-    def get_num_fields(self, type1_id: int, type2_id: int) -> Optional[int]:
-        """Extract the number of fields for the object"""
-
-        # Metadata for Type 1 objects are stored in offsets[1]
-        # Type 2 objects in offsets[3]
-        if type1_id != 0 and type2_id == 0:
-            self.ssdata.seek(self._offsets[1])
-            obj_type_id = type1_id
-        elif type1_id == 0 and type2_id != 0:
-            self.ssdata.seek(self._offsets[3])
-            obj_type_id = type2_id
-        else:
-            obj_type_id = 0  # No flag
-
-        if obj_type_id == 0:
-            return None
-
-        self.ssdata.seek(8, 1)  # Discard first 8 bytes
-        # Metadata is ordered by object type ID
-        # Find the correct metadata block for object type ID
-
-        while obj_type_id - 1 > 0:
-            # first integer gives number of subblocks
-            data = self.ssdata.read(4)
-            nblocks = struct.unpack(self.byte_order + "I", data)[0]
-
-            # each subblock is 12 bytes long
-            nbytes = nblocks * 12
-            nbytes = nbytes + (nbytes + 4) % 8  # padding to 8 byte boundary
-            self.ssdata.seek(nbytes, 1)
-            obj_type_id -= 1
-
-        data = self.ssdata.read(4)  # Read nfields
-        nfields = struct.unpack(self.byte_order + "I", data)[0]
-
-        return nfields
-
-    def get_default_fields(self, class_id: int) -> Dict[str, Any]:
-        """Extract the properties with default values for an object"""
-
-        def_class_pos = self._default_fields_pos[class_id - 1]
-        self.ssdata.seek(def_class_pos)
-        data = self.ssdata.read(8)  # Read miMATRIX header
-        _, nbytes = struct.unpack(self.byte_order + "II", data)
-        self.ssdata.seek(-8, 1)
-        mat_data = self.ssdata.read(nbytes + 8)  # Read the full cell contents
-        obj_default_fields = self.read_mat_data(mat_data)
-        # Wrap in dict
-        if obj_default_fields.size == 0:
-            return {}
-        else:
-            return {
-                field: obj_default_fields[0, 0][field]
-                for field in obj_default_fields.dtype.names
-            }
-            # Indexing by (0,0) since the struct array is expected to be 1x1 dimensions
-
-    def extract_from_field(self, nfields: int, class_id: int) -> Dict[str, Any]:
-        """Extracts contents of each field of an object"""
-
-        curPos = self.ssdata.tell()
-        obj_fields = self.get_default_fields(class_id)
-
-        self.ssdata.seek(curPos)
-        while nfields > 0:
-            # Extract field name
-            data = self.ssdata.read(12)
-            field_index, field_type, field_value = struct.unpack(
-                self.byte_order + "3I", data
-            )
-            field_name = self.names[field_index - 1]
-            curPos = self.ssdata.tell()
-
-            if field_type == 2:  # Logical Attribute
-                obj_fields[field_name] = field_value
-                nfields -= 1
-                continue
-
-            # Extract contents from field name
-            self.ssdata.seek(
-                self._cell_pos[field_value + 2]
-            )  # adding two since array includes Cell 1 and Cell 2
-            data = self.ssdata.read(8)
-            _, nbytes = struct.unpack(self.byte_order + "II", data)
-            self.ssdata.seek(-8, 1)
-            mat_data = self.ssdata.read(nbytes + 8)  # Read the full cell contents
-            obj_fields[field_name] = self.read_mat_data(mat_data)
-
-            # Move to next field
-            self.ssdata.seek(curPos)
-            nfields -= 1
-
-        return obj_fields
-
-    def extract_fields(
-        self, class_id: int, type1_id: int, type2_id: int
-    ) -> Tuple[Dict[str, Any], Any, Any | None]:
+    def extract_fields(self, type1_id: int, type2_id: int) -> np.ndarray:
         """Extracts the fields from the object"""
 
-        nfields = (
-            self.get_num_fields(type1_id, type2_id) or 0
-        )  # If nfields is None, set to 0
-        obj_fields = self.extract_from_field(nfields, class_id)
-        handle_class_name, class_name = self.get_class_name(class_id)
+        if type1_id == 0 and type2_id != 0:
+            obj_type_id = type2_id
+            byte_offset = np.frombuffer(
+                self.ssdata[0, 0][20:24].tobytes(), dtype=self.byte_order
+            )[0]
+        elif type1_id != 0 and type2_id == 0:
+            obj_type_id = type1_id
+            byte_offset = np.frombuffer(
+                self.ssdata[0, 0][12:16].tobytes(), dtype=self.byte_order
+            )[0]
+        else:
+            raise ValueError("Could not determine object type")
 
-        fields = obj_fields
-        if not self.raw_data:
-            fields = convert_to_object(obj_fields, class_name, self.byte_order)
+        field_ids = self.get_ids(obj_type_id, byte_offset, nbytes=12)
+        field_names = [self.names[field_id - 1] for field_id in field_ids[:, 0]]
+        field_dtype = [(name, object) for name in field_names]
+        obj_props = np.empty((1, 1), dtype=field_dtype)
 
-        return fields, class_name, handle_class_name
+        for i, (field_type, field_value) in enumerate(field_ids[:, 1:]):
+            if field_type == 1:
+                res = self.ssdata[2 + int(field_value), 0]
+                res = self.process_res_array(res)
+                obj_props[0, 0][i] = res
+            elif field_type == 2:
+                obj_props[0, 0][i] = np.array(field_value, dtype=np.bool_)
+            else:
+                raise ValueError(f"Unknown field type: {field_type}")
 
-    def extract_handles(self, obj_dep_id: int) -> Optional[Dict[str, Any]]:
-        """Reads handle objects of a class"""
+        return obj_props[0, 0]
 
-        self._get_handle_pos(obj_dep_id)
+    def extract_handles(self, dep_id: int) -> Optional[np.ndarray]:
+        """Extracts the handles from the object"""
 
-        data = self.ssdata.read(4)
-        nhandles = struct.unpack(self.byte_order + "I", data)[0]
-        if nhandles == 0:
+        # Get block corresponding to dep_id
+        byte_offset = np.frombuffer(
+            self.ssdata[0, 0][24:28].tobytes(), dtype=self.byte_order
+        )[0]
+        handle_type2_ids = self.get_ids(dep_id, byte_offset, nbytes=4)[:, 0]
+        if not np.any(handle_type2_ids):
             return None
 
-        nbytes = nhandles * 4
-        data = self.ssdata.read(nbytes)
-        handle_type2_ids = struct.unpack(self.byte_order + "I" * nhandles, data)
+        handle_array = np.empty(len(handle_type2_ids), dtype=object)
+        for i, handle_id in enumerate(handle_type2_ids):
+            class_id, object_id = self.get_handle_class_instance(handle_id)
+            if object_id < 0:
+                raise ValueError("Handle class instance not found")
+            handle_array[i] = self.read_object_arrays(object_id, class_id, dims=[1, 1])
 
-        handle_dict = {}
-        key_index = 1
-        for handle_id in handle_type2_ids:
-            obj_id = next(
-                (
-                    i + 1
-                    for i, t in enumerate(self._unique_objects)
-                    if t[2] == handle_id
-                ),
-                -1,
-            )
-            if obj_id == -1:
-                raise ValueError(
-                    f"Object ID {handle_id} not found as Handle Class Instance"
-                )
+        return handle_array
 
-            class_id, _, _, _ = self.get_object_dependencies(obj_id)
-            handle_class_name, class_name = self.get_class_name(class_id)
-            key_name = f"{handle_class_name}.{class_name}.{key_index}"
-            handle_dict[key_name] = self.read_object_arrays(obj_id, dims=[1, 1])
-            key_index += 1
-
-        return handle_dict
-
-    def read_nested_objects(self, object_id: int) -> Dict[str, Any]:
+    def read_nested_objects(
+        self, object_id: int
+    ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         """Reads nested objects for a given object
         For e.g. if the property of an object is another object"""
 
-        class_id, type1_id, type2_id, dep_id = self.get_object_dependencies(object_id)
-        obj, class_name, handle_class_name = self.extract_fields(
-            class_id, type1_id, type2_id
-        )
+        _, type1_id, type2_id, dep_id = self.get_object_dependencies(object_id)
+        obj_props = self.extract_fields(type1_id, type2_id)
         obj_handles = self.extract_handles(dep_id)
 
-        res = {"__class_name__": class_name, "__fields__": obj}
+        return obj_props, obj_handles
 
-        if handle_class_name is not None:
-            res["__handle_class__"] = handle_class_name
-        if obj_handles is not None:
-            res["__fields__"].update(obj_handles)
-
-        return res
-
-    def read_object_arrays(self, object_id: int, dims: List[int]) -> np.ndarray:
+    def read_object_arrays(
+        self, object_id: int, class_id: int, dims: List[int]
+    ) -> np.ndarray:
         """Reads an object array for a given variable"""
 
-        obj_array = []
+        props_list = []
+        handles_list = []
         total_objects_in_array = np.prod(np.array(dims))
 
+        # TODO: Fix loop logic
         for i in range(object_id - total_objects_in_array + 1, object_id + 1):
             _, _, _, dep_id = self.get_object_dependencies(object_id)
             ndeps = dep_id - object_id
-            res = self.read_nested_objects(object_id=i)
-            obj_array.append(res)
-            i = i + ndeps
+            obj_props, obj_handles = self.read_nested_objects(i)
+            props_list.append(obj_props)
+            handles_list.append(obj_handles)
+            i += ndeps
 
-        obj_array = np.reshape(obj_array, dims)
-        return obj_array
+        obj_props = np.array(props_list).reshape(dims)
+
+        obj_default_props = self.ssdata[-1, 0][class_id, 0]
+        obj_default_props = (
+            obj_default_props[0, 0]
+            if obj_default_props.shape[1] > 0
+            else obj_default_props[0]
+        )
+        if self.raw_data:
+            # TODO
+            # obj_props = convert_to_object(obj_props, obj_default_props)
+            pass
+
+        handle_name, class_name = self.get_class_name(class_id)
+        if handle_name is not None:
+            class_name = f"{handle_name}.{class_name}"
+        u1 = self.ssdata[-3, 0][class_id, 0]
+        u2 = self.ssdata[-2, 0][class_id, 0]
+
+        result = np.empty((), dtype=CLASS_DTYPE)
+        result["__class__"] = class_name
+        result["__properties__"] = obj_props
+        result["__handles__"] = obj_handles
+        result["__default_properties__"] = obj_default_props
+        result["__s3__"] = u1
+        result["__s2__"] = u2
+
+        return result
