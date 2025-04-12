@@ -13,6 +13,7 @@ Field contents of object arrays of MATLAB datatypes like `string` or `datetime` 
 - [`timetable`](#timetable)
 - [What if the field contains an object?](#what-if-the-field-contains-an-object)
 - [The `any` Property](#the-any-property)
+- [Enumeration Instance Arrays](#enumeration-instance-arrays)
 - [Handle Classes](#handle-classes)
 
 <!--TOC-->
@@ -116,5 +117,20 @@ Going through different datatypes, you'll notice multiple classes contianing a p
 - `timetable`
 - `function_handle_workspace`
 
-<a id="section_id"></a>
+## Enumeration Instance Arrays
+
+Enumeration instance arrays are stored as `mxOPAQUE_CLASS` arrays of `MCOS` type. The object metadata for this (in the main part of the MAT-file) is returned as a `struct` array containing the following fields:
+
+1. `EnumerationInstanceTag`: Contains the reference value `0xDD00000000`.
+2. `ClassName`: A metadata indicator to extract the enumeration class name from subsystem.
+3. `ValueNames`: A metadata indicator to extract the property names of the enumeration class from subsystem.
+4. `Values`: Contains an array of object references, which are used to extract the contents of each instance of the enumeration array from subsytem. If the properties of the enumeration class are not initialized/instantiated, then this is an empty array.
+5. `ValueIndices`: The value indices of the enumeration array. This also indicates the dimensions of the enumeration array.
+6. `BuiltinClassName`: This is set if the enumeration class specifies a superclass. The value is a metadata indicator to extract the name of the superclass.
+
 ## Handle Classes
+
+To add:
+
+1. `dynamicprops`
+2. `proplistener`

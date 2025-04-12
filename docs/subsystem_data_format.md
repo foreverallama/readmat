@@ -26,18 +26,22 @@ The data within this element is formatted like a MAT-file itself, and contains i
 ```text
 ├──Basic File Header
 ├── Data Element: mxSTRUCT_CLASS
-│   ├── Field "MCOS": Cell Array
-        ├── Cell 1
-        ├── Cell 2
-        ├── Cell 3
-        ├── Cell 4
-        .
-        .
-        .
-        ├── Cell (3 + N)
-        ├── Cell (3 + N) + 1
-        ├── Cell (3 + N) + 2
-        ├── Cell (3 + N) + 3
+│   ├── Field "MCOS": mxOPAQUE_CLASS
+        ├── Class "FileWrapper__"
+        ├── Type: "MCOS"
+        ├── Metadata: Cell Array
+            ├── Cell 1
+            ├── Cell 2
+            ├── Cell 3
+            ├── Cell 4
+            .
+            .
+            .
+            ├── Cell (3 + N)
+            ├── Cell (3 + N) + 1
+            ├── Cell (3 + N) + 2
+            ├── Cell (3 + N) + 3
+    ├── Field "java"
 ├── Data Element: Character Array
 ```
 
@@ -49,7 +53,9 @@ This is a basic version of the file header of the actual MAT-file, mentioning on
 
 ## Data Element 1: mxStruct_CLASS
 
-The first data element is of `mxSTRUCT_CLASS`, which has a single field called `MCOS`. This field contains an array of type `mxOPAQUE_CLASS`, which contains all the information we need.
+The first data element is of `mxSTRUCT_CLASS`. This is a `1 x 1` struct array which has fields set based on the variables in the MAT-file. For `mxOPAQUE_CLASS` objects, this will contain a field `MCOS`. For `java` objects, this will contain a field `java`.
+
+The `MCOS` field contains an array of type `mxOPAQUE_CLASS`, which contains all the information we need. The structure of `java` has not yet been studied.
 
 ### Data Subelement: mxOPAQUE_CLASS
 
@@ -133,10 +139,10 @@ This region is structured exactly the same as _Region 2_, but is for Type 2 obje
 
 This region links objects to its corresponding handle superclass objects.
 
-- The start of thisregion is indicated by the fifth offset value
-- This region consists of blocks of 32-bit integers, in order of `object_id`
+- The start of this region is indicated by the fifth offset value
+- This region consists of blocks of 32-bit integers, in order of `dependency_id`
 - Each block is of the form `(num_handle_properties, handle_id_1, handle_id_2 ...., handle_id_N)`
-CHECK WHAT TYPE OF ID IT IS
+- Here, `handle_id` points to the `type2_id` of the handle object
 - Each block is padded to 8 byte boundary
 - The first block is all zeros
 

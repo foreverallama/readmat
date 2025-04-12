@@ -11,11 +11,10 @@ The MAT-file format is well documented [here](https://www.mathworks.com/help/pdf
   - [Type System Name](#type-system-name)
   - [Class Name](#class-name)
   - [Object Metadata](#object-metadata)
-    - [Object Reference](#object-reference)
+    - [Reference Value](#reference-value)
     - [Dimensions Array](#dimensions-array)
     - [Object ID](#object-id)
     - [Class ID](#class-id)
-  - [Enumeration Classes](#enumeration-classes)
 - [Subsystem Data](#subsystem-data)
 
 <!--TOC-->
@@ -73,16 +72,16 @@ This subelement identifies the class which the object array belongs to. The clas
 
 ### Object Metadata
 
-Object metadata is written as a miUINT32 array. This can be read as a data subelement, and usually contains the following:
+The structure of the object metadata depends on the type of object. For `MCOS` objects, these could be either `uint32` or `struct` arrays (as far as I know). Regardless, the actual contents of the object is indicated by an **object reference** which is a `miUINT32` array. This can be read as a data subelement, and usually contains the following:
 
 | Subelements | Number of Bytes |
 |-----------|-----------|
 | Object Reference | 4 bytes |
 | Dimensions Array | numberOfDimensions * 4 bytes |
-| Object ID | 4 bytes |
+| Object ID | numObjectsInArray * 4 bytes |
 | Class ID | 4 bytes |
 
-#### Object Reference
+#### Reference Value
 
 This contains the value `0xDD000000` which is used internally by MATLAB to identify data elements as objects (explained later in detail)
 
@@ -92,22 +91,11 @@ The first value of the array indicates the number of dimensions (`ndims`) of the
 
 #### Object ID
 
-This contains a number which serves as a unique identifier for the object. All objects in a MAT-file are given an object ID, which will be used later to extract its contents. Object IDs are numbered starting from `1`.
+This contains a list of integers which serves as a unique identifiers for the object. All objects in a MAT-file are given an object ID, which will be used later to extract its contents. Object IDs are numbered starting from `1`. Object arrays are treated as a collection of object instances, hence each instance in the array is assigned an object ID. In this case, the object ID would be a list of integers, the length of which would be indicated by the dimensions array.
 
 #### Class ID
 
 This contains a number which servers as a unique identifier for the class type of an object. All objects in a MAT-file are associated with a class ID to identify the class they belong to. Class IDs are numbered starting from `1`.
-
-### Enumeration Classes
-
-For enumeration instances, the object metadata is instead a `struct` array, containing the following fields:
-
-1. `EnumerationInstanceTag`: Contains an object reference (mentioned in the above table)
-2. `ClassName`: A metadata indicator to extract the enumeration class name from subsystem data
-3. `ValueNames`: A metadata indicator to extract the properties of this enumeration class
-4. `Values`: A `uint32` array of object metadata as indicated in the above table. The object ID and class ID point to the enumeration class object. If the properties of the enumeration class are not initialized/instantiated, then this is an empty array.
-5. `ValueIndices`: The value indices of the enumeration array
-6. `BuiltinClassName`: This is set if the enumeration class specifies a superclass. The value is a metadata indicator to extract the name of the superclass
 
 ## Subsystem Data
 

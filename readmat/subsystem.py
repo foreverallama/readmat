@@ -5,20 +5,28 @@ import numpy as np
 CLASS_DTYPE = [
     ("__class__", "O"),
     ("__properties__", "O"),
-    ("__handles__", "O"),
     ("__default_properties__", "O"),
     ("__s3__", "O"),
     ("__s2__", "O"),
 ]
 
+# TODO: Wrap output in numpy array of CLASS_DTYPE
+
 
 class FileWrapper:
     def __init__(
-        self, ssdata: np.ndarray, byte_order: str, raw_data: bool = False
+        self,
+        ssdata: np.ndarray,
+        byte_order: str,
+        raw_data: bool = False,
+        chars_as_strings: bool = False,
+        uint16_codec: str = "utf-8",
     ) -> None:
         self.ssdata = ssdata
         self.byte_order = "<u4" if byte_order == "<" else ">u4"
         self.raw_data = raw_data
+        self.chars_as_strings = chars_as_strings
+        self.uint16_codec = uint16_codec
         if not self.check_subsystem_integrity():
             raise ValueError("Unknown format of subsystem data")
         self.names = self.get_field_names()
@@ -89,6 +97,7 @@ class FileWrapper:
         data = self.ssdata[0, 0][40:byte_end].tobytes()
         raw_strings = data.split(b"\x00")
         all_names = [s.decode("ascii") for s in raw_strings if s]
+        # convert this to numpy array
         return all_names
 
     def get_class_name(self, class_id: int) -> Tuple[Optional[str], str]:
@@ -278,6 +287,7 @@ class FileWrapper:
             if obj_default_props.shape[1] > 0
             else obj_default_props[0]
         )
+        # TODO: Process default props
 
         if self.raw_data:
             # TODO
@@ -287,6 +297,8 @@ class FileWrapper:
         handle_name, class_name = self.get_class_name(class_id)
         if handle_name is not None:
             class_name = f"{handle_name}.{class_name}"
+        if self.chars_as_strings:
+            class_name = np.asarray([class_name])
 
         # Remaining unknown class properties
         u1 = self.ssdata[-3, 0][class_id, 0]

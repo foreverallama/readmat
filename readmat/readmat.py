@@ -1,3 +1,4 @@
+import sys
 import warnings
 from io import BytesIO
 from typing import Any, Dict, Tuple
@@ -28,7 +29,7 @@ def get_matfile_version(ssStream: BytesIO) -> Tuple[int, int, str]:
     )
 
 
-def read_subsystem(ssStream: BytesIO) -> Tuple[np.ndarray, str]:
+def read_subsystem(ssStream: BytesIO, **kwargs) -> Tuple[np.ndarray, str]:
     """Reads subsystem data"""
 
     mjv, mnv, byte_order = get_matfile_version(ssStream)
@@ -36,7 +37,14 @@ def read_subsystem(ssStream: BytesIO) -> Tuple[np.ndarray, str]:
         raise NotImplementedError(f"Subsystem version {mjv}.{mnv} not supported")
 
     ssStream.seek(8)  # Skip subsystem header
-    MR = MatFile5Reader(ssStream, byte_order=byte_order)
+    kwargs.pop(
+        "byte_order", None
+    )  # Remove byte order from kwargs, obtained from subsystem header
+    kwargs.pop(
+        "variable_names", None
+    )  # Remove variable names from kwargs, not needed for reading subsystem data
+
+    MR = MatFile5Reader(ssStream, byte_order=byte_order, **kwargs)
     MR.initialize_read()
     hdr, _ = MR.read_var_header()
     try:
@@ -115,19 +123,38 @@ def check_object_type(mm: np.ndarray) -> int:
     return obj_type
 
 
-def load_from_mat(file_path: str, raw_data: bool = False) -> Dict[str, Any]:
-    mdict = loadmat(file_path)
-    ssdata = mdict.pop("__function_workspace__", None)
+def load_from_mat(
+    file_path: str, mdict=None, raw_data: bool = False, *, spmatrix=True, **kwargs
+) -> Dict[str, Any]:
+    """Loads variables from MAT-file"""
+
+    # Remove unsupported arguments for scipy.io.loadmat
+    kwargs.pop("simplify_cells", None)
+    kwargs.pop("squeeze_me", None)
+    kwargs.pop("struct_as_record", None)
+
+    matfile_dict = loadmat(file_path, mdict=mdict, spmatrix=spmatrix, **kwargs)
+    ssdata = matfile_dict.pop("__function_workspace__", None)
     if ssdata is None:
         print("No subsystem data found in the file.")
-        return mdict
+
+        if mdict is not None:
+            mdict.update(matfile_dict)
+            return mdict
+        return matfile_dict
 
     ssStream = BytesIO(ssdata)
-    res, byte_order = read_subsystem(ssStream)
+    res, byte_order = read_subsystem(ssStream, **kwargs)
     ss_fields = res[0, 0].dtype.fields
+    uint16_codec = kwargs.pop("uint16_codec", sys.getdefaultencoding())
+    chars_as_strings = kwargs.pop("chars_as_strings", False)
     if "MCOS" in ss_fields:
         fwrap = FileWrapper(
-            res[0, 0]["MCOS"][()]["__object_metadata__"], byte_order, raw_data
+            res[0, 0]["MCOS"][()]["__object_metadata__"],
+            byte_order,
+            raw_data,
+            chars_as_strings,
+            uint16_codec,
         )
 
     if "java" in ss_fields:
@@ -135,7 +162,7 @@ def load_from_mat(file_path: str, raw_data: bool = False) -> Dict[str, Any]:
             "Java object found in the file. These are not supported yet.", UserWarning
         )
 
-    for var, data in mdict.items():
+    for var, data in matfile_dict.items():
         # Skip mdict headers
         if not isinstance(data, np.ndarray):
             continue
@@ -160,6 +187,20 @@ def load_from_mat(file_path: str, raw_data: bool = False) -> Dict[str, Any]:
             )
             continue
 
-        mdict[var] = obj_array
+        matfile_dict[var] = obj_array
+
+    if spmatrix:
+        from scipy.sparse import coo_matrix, issparse
+
+        for name, var in list(matfile_dict.items()):
+            if issparse(var):
+                # This would not recognize sparse matrices within struct/cell/object arrays
+                # Ideally, pass this bool to process_res_array
+                matfile_dict[name] = coo_matrix(var)
+
+    if mdict is not None:
+        mdict.update(matfile_dict)
+    else:
+        mdict = matfile_dict
 
     return mdict

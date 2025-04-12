@@ -18,9 +18,46 @@ Clone and install using pip:
 ```bash
 git clone https://github.com/foreverallama/readmat.git
 pip install .
+# OR
+pip install git+https://github.com/foreverallama/readmat.git
 ```
 
-### Reading Subsystem Data
+### `readmat.load_from_mat(file_path, raw_data=False, mdict=None, *, spmatrix=True, **kwargs)`
+
+#### Parameters:
+
+- **`file_path`**: `str`
+  Full path to the MAT-file.
+
+- **`raw_data`**: `bool`, *optional*
+  If `False`, returns object data as raw MATLAB structures.
+  If `True`, converts data into corresponding Python objects (e.g., `string`, `datetime`).
+
+- **`mdict`**: `dict`, *optional*
+  Dictionary into which MATLAB variables will be inserted. If `None`, a new dictionary is created and returned.
+
+- **`spmatrix`**: `bool`, *optional* (default = `True`)
+  Whether to read MATLAB sparse matrices as SciPy sparse matrix `coo_matrix`.
+
+- **`**kwargs`**:
+  Additional keyword arguments passed to [`scipy.io.loadmat`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.io.loadmat.html).
+  These include:
+  - `byte_order`
+  - `mat_dtype`
+  - `chars_as_strings`
+  - `matlab_compatible`
+  - `verify_compressed_data_integrity`
+  - `variable_names`
+  - `uint16_codec`
+
+Currently, the following arguments are not supported:
+
+- `appendmat`
+- `squeeze_me`
+- `struct_as_record`
+- `simplify_cells`
+
+### Example
 
 To read subsystem data from a `.mat` file:
 
@@ -32,9 +69,7 @@ data = load_from_mat(file_path)
 print(data)
 ```
 
-**Note**: Those working with the official `scipy` release can use `read_subsystem_legacy()`. This works as `scipy.io.loadmat` only returns the last object variable in a MAT-file. This is because `loadmat` is not able to detect the array name, replacing it with a placeholder `None` which gets overwritten for each object read from file.
-
-`load_from_mat()` uses a modified fork of `scipy`. The fork currently contains a few minor changes to `scipy.io` to return variable names and object metadata for all objects in a MAT-file. This change is available [on git](https://github.com/foreverallama/scipy/tree/readmat-scipy) and can be installed directly from the branch. You can also view the changes under `patches/scipy_changes.patch` and apply it manually. Note that you might need to rebuild as parts of the Cython code was modified.
+**Note**: `load_from_mat()` uses a modified fork of `scipy`. The fork currently contains a few minor changes to `scipy.io` to return variable names and object metadata for all objects in a MAT-file. This change is available [on Github](https://github.com/foreverallama/scipy/tree/readmat-scipy) and can be installed directly from the branch. You can also view the changes under `patches/scipy_changes.patch` and apply it manually. Note that you might need to rebuild as parts of the Cython code was modified.
 
 ### MATLAB objects
 
@@ -42,11 +77,19 @@ MATLAB objects like `datetime` and `duration` are implemented using wrapper obje
 
 ```python
 data_dict = load_from_mat(file_path)
-datetime_value = data["myVarName"]["__fields__"]
+datetime_value = data["myVarName"]["__properties__"][0, 0]
 
 dt = datetime_value[0]  # Returns a datetime object
 print(datetime_value)  # Prints datetime in readable format
 ```
+
+MATLAB objects are returned as a dictionary with the following fields:
+
+- `__class__`: The class name.
+- `__properties__`: A structured `numpy.ndarray` containing the property names and their contents. Dimensions are determined by the object dimensions.
+- `__default_properties__`: A structured `numpy.ndarray` containing the default values of the properties of the class (if any).
+- `__s3__`: The purpose of this data is unknown, but is contained within the subsystem.
+- `__s2__`: The purpose of this data is unknown, but is contained within the subsystem.
 
 ## Breakdown
 
@@ -67,9 +110,3 @@ Feel free to create a PR if you'd like to add something, or open up an issue if 
 ## Acknowledgement
 
 Big thanks to [mahalex](https://github.com/mahalex/MatFileHandler) for their detailed breakdown of MAT-files. Most of this wouldn't be possible without it.
-
-## TODO
-
-- [ ] Code cleanup for readability
-- [ ] Squeeze output representation to keep it simple
-- [ ] Add tests
