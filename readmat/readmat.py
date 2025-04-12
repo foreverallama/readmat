@@ -62,12 +62,10 @@ def load_enumeration_object(metadata: np.ndarray, fwrap: FileWrapper) -> np.ndar
     else:
         builtin_class_name = None
 
+    value_idx = metadata[0, 0]["ValueIndices"]
     value_name_idx = metadata[0, 0]["ValueNames"]
     value_names = [fwrap.names[val - 1] for val in value_name_idx.flat]
-    value_names = np.array(value_names).reshape(value_name_idx.shape)
-
-    # Extract the enumeration values
-    value_idx = metadata[0, 0]["ValueIndices"]
+    value_names = np.array(value_names).reshape(value_idx.shape)
 
     enum_array = []
     for val in value_idx.flat:
@@ -145,8 +143,6 @@ def load_from_mat(file_path: str, raw_data: bool = False) -> Dict[str, Any]:
         # Skip non opaque data
         if data.dtype != OPAQUE_DTYPE:
             continue
-
-        print(f"Loading {var}...")
 
         metadata = data[()]["__object_metadata__"]
         obj_type = check_object_type(metadata)

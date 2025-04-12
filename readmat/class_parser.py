@@ -4,6 +4,11 @@ import numpy as np
 import pandas as pd
 import pytz  # type: ignore
 
+# TODO: Add support for following classes:
+# 1. dynamicprops
+# 2. function_handle
+# 3. event.proplistener
+
 
 class MatDateTime:
     # * Formatting from MATLAB formats not supported yet
