@@ -287,7 +287,7 @@ class FileWrapper:
             if obj_default_props.shape[1] > 0
             else obj_default_props[0]
         )
-        # TODO: Process default props
+        obj_default_props = self.process_res_array(obj_default_props)
 
         if self.raw_data:
             # TODO
