@@ -1,30 +1,13 @@
 import warnings
 from io import BytesIO
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, Tuple
 
 import numpy as np
 from scipy.io import loadmat
 from scipy.io.matlab._mio5 import MatFile5Reader
 from scipy.io.matlab._mio5_params import OPAQUE_DTYPE
 
-from .subsystem import FileWrapper
-
-
-def get_object_reference(metadata: np.ndarray) -> Tuple[int, int, List[int]]:
-    """Extracts object ID from the data array"""
-    ref = metadata[0, 0]
-    if ref != 0xDD000000:
-        raise ValueError("Invalid object reference. Expected 0xDD000000. Got {ref}")
-
-    ndims = metadata[1, 0]
-    dims = metadata[2 : 2 + ndims, 0]
-    if len(dims) != ndims:
-        raise ValueError("Invalid dimensions. Expected {ndims}. Got {dims}")
-
-    object_id = metadata[-2, 0]
-    class_id = metadata[-1, 0]
-
-    return object_id, class_id, dims
+from .subsystem import FileWrapper, get_object_reference
 
 
 def get_matfile_version(ssStream: BytesIO) -> Tuple[int, int, str]:
@@ -106,10 +89,10 @@ def load_enumeration_object(metadata: np.ndarray, fwrap: FileWrapper) -> np.ndar
 
 
 def load_MCOS_object(metadata: np.ndarray, fwrap: FileWrapper) -> np.ndarray:
-    object_id, class_id, dims = get_object_reference(metadata)
-    obj_array = fwrap.read_object_arrays(object_id, class_id, dims)
-    if obj_array.size == 0:
-        return np.array([])
+    object_ids, class_id, dims = get_object_reference(metadata)
+    obj_array = fwrap.read_object_arrays(object_ids, class_id, dims)
+    # if obj_array.size == 0:
+    # return np.array([])
     return obj_array
 
 
@@ -162,6 +145,8 @@ def load_from_mat(file_path: str, raw_data: bool = False) -> Dict[str, Any]:
         # Skip non opaque data
         if data.dtype != OPAQUE_DTYPE:
             continue
+
+        print(f"Loading {var}...")
 
         metadata = data[()]["__object_metadata__"]
         obj_type = check_object_type(metadata)

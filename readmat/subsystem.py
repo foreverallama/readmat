@@ -19,10 +19,24 @@ class FileWrapper:
         self.ssdata = ssdata
         self.byte_order = "<u4" if byte_order == "<" else ">u4"
         self.raw_data = raw_data
+        if not self.check_subsystem_integrity():
+            raise ValueError("Unknown format of subsystem data")
         self.names = self.get_field_names()
+
+    def check_subsystem_integrity(self) -> bool:
+        """Checks the integrity of the subsystem data"""
+        toc_flag = np.frombuffer(
+            self.ssdata[0, 0][0:4].tobytes(), dtype=self.byte_order
+        )[0]
+        if toc_flag != 4:
+            raise ValueError("Unknown flag in FileWrapper table of contents")
+
+        return True
 
     def check_object_reference(self, res: Any) -> bool:
         """Checks if the field content is a reference to another object"""
+        # * Need to study condition with more examples
+
         if not isinstance(res, np.ndarray):
             return False
         if res.dtype != np.uint32:
@@ -31,21 +45,29 @@ class FileWrapper:
             return False
 
         ref_value = res[0, 0]
-        ndims = res[1, 0]
-        shapes = res[2 : 2 + ndims, 0]
         if ref_value != 0xDD000000:
             return False
-        if ndims <= 1 or len(shapes) != ndims:
+
+        ndims = res[1, 0]
+        if ndims <= 1:
             return False
 
-        # # * Need to study condition with more examples
-        # if np.count_nonzero(shapes != 1) > 1:  # At most 1 dimension can have size > 1
-        #     return False
+        dims = res[2 : 2 + ndims, 0]
+        total_objs = np.prod(dims)
+        if total_objs <= 0:
+            return False
+
+        object_ids = res[2 + ndims : 2 + ndims + total_objs, 0]
+        if np.any(object_ids <= 0):
+            return False
+
+        if object_ids.size + ndims + 3 != res.shape[0]:
+            return False
+
         return True
 
     def get_object_dependencies(self, object_id: int) -> Tuple[int, int, int, int]:
-        """Reads object dependencies for a given object
-        For e.g. if the property of an object is another object"""
+        """Extracts object dependency IDs for a given object"""
 
         byte_offset = np.frombuffer(
             self.ssdata[0, 0][16:20].tobytes(), dtype=self.byte_order
@@ -59,8 +81,7 @@ class FileWrapper:
         return class_id, type1_id, type2_id, dep_id
 
     def get_field_names(self) -> List[str]:
-        """Reads class name for a given object
-        For e.g. if the property of an object is another object"""
+        """Extracts field and class names from the subsystem data"""
 
         byte_end = np.frombuffer(
             self.ssdata[0, 0][8:12].tobytes(), dtype=self.byte_order
@@ -71,8 +92,7 @@ class FileWrapper:
         return all_names
 
     def get_class_name(self, class_id: int) -> Tuple[Optional[str], str]:
-        """Reads class name for a given object
-        For e.g. if the property of an object is another object"""
+        """Extracts class name and handle for a given object"""
 
         byte_offset = np.frombuffer(
             self.ssdata[0, 0][8:12].tobytes(), dtype=self.byte_order
@@ -89,8 +109,7 @@ class FileWrapper:
         return handle_name, class_name
 
     def get_ids(self, id: int, byte_offset: int, nbytes: int) -> np.ndarray:
-        """Reads ids for a given object
-        For e.g. if the property of an object is another object"""
+        """Extract nblocks and subblock contents for a given object"""
 
         # Get block corresponding to type ID
         while id > 0:
@@ -119,8 +138,7 @@ class FileWrapper:
         return ids.reshape((nblocks, nbytes // 4))
 
     def get_handle_class_instance(self, type2_id: int) -> Tuple[int, int]:
-        """Reads handle class instance for a given object
-        For e.g. if the property of an object is another object"""
+        """Reads handle class instance ID for a given object"""
 
         start, end = np.frombuffer(
             self.ssdata[0, 0][16:24].tobytes(), dtype=self.byte_order
@@ -129,11 +147,11 @@ class FileWrapper:
             self.ssdata[0, 0][start:end].tobytes(), dtype=self.byte_order
         ).reshape(-1, 6)
 
-        for block in blocks:
+        for idx, block in enumerate(blocks):
             if block[4] == type2_id:
                 class_id = block[0]
-                object_id = block[5]
-                return class_id, object_id
+                object_id = idx
+                return class_id, np.array([object_id])
 
         raise ValueError(f"Handle class instance not found for type2_id: {type2_id}")
 
@@ -168,16 +186,13 @@ class FileWrapper:
             return result
 
         if self.check_object_reference(arr):
-            ndims = arr[1, 0].item()
-            dims = arr[2 : 2 + ndims, 0]
-            object_id = arr[-2, 0].item()
-            class_id = arr[-1, 0].item()
-            return self.read_object_arrays(object_id, class_id, dims)
+            object_ids, class_id, dims = get_object_reference(arr)
+            return self.read_object_arrays(object_ids, class_id, dims)
 
         return arr
 
-    def extract_fields(self, type1_id: int, type2_id: int) -> np.ndarray:
-        """Extracts the fields from the object"""
+    def extract_fields(self, type1_id: int, type2_id: int, dep_id: int) -> np.ndarray:
+        """Extracts the properties for an object"""
 
         if type1_id == 0 and type2_id != 0:
             obj_type_id = type2_id
@@ -195,6 +210,13 @@ class FileWrapper:
         field_ids = self.get_ids(obj_type_id, byte_offset, nbytes=12)
         field_names = [self.names[field_id - 1] for field_id in field_ids[:, 0]]
         field_dtype = [(name, object) for name in field_names]
+        # Adding Handles
+        handle_array = self.extract_handles(dep_id)
+        if handle_array is not None:
+            # Will be good to add handle name directly over here
+            for idx, _ in enumerate(handle_array):
+                field_dtype.append((f"__handle_{idx + 1}__", object))
+
         obj_props = np.empty((1, 1), dtype=field_dtype)
 
         for i, (field_type, field_value) in enumerate(field_ids[:, 1:]):
@@ -207,66 +229,56 @@ class FileWrapper:
             else:
                 raise ValueError(f"Unknown field type: {field_type}")
 
+        # Include Handle Values
+        if handle_array is not None:
+            for idx, handle in enumerate(handle_array):
+                obj_props[0, 0][f"__handle_{idx + 1}__"] = handle
+
         return obj_props[0, 0]
 
     def extract_handles(self, dep_id: int) -> Optional[np.ndarray]:
-        """Extracts the handles from the object"""
+        """Extracts the handle instances for an object"""
 
         # Get block corresponding to dep_id
         byte_offset = np.frombuffer(
             self.ssdata[0, 0][24:28].tobytes(), dtype=self.byte_order
         )[0]
         handle_type2_ids = self.get_ids(dep_id, byte_offset, nbytes=4)[:, 0]
-        if not np.any(handle_type2_ids):
+        if handle_type2_ids.size == 0:
             return None
 
-        handle_array = np.empty(len(handle_type2_ids), dtype=object)
+        handle_array = np.empty(handle_type2_ids.size, dtype=object)
         for i, handle_id in enumerate(handle_type2_ids):
             class_id, object_id = self.get_handle_class_instance(handle_id)
-            if object_id < 0:
-                raise ValueError("Handle class instance not found")
             handle_array[i] = self.read_object_arrays(object_id, class_id, dims=[1, 1])
 
         return handle_array
 
-    def read_nested_objects(
-        self, object_id: int
-    ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
-        """Reads nested objects for a given object
-        For e.g. if the property of an object is another object"""
-
-        _, type1_id, type2_id, dep_id = self.get_object_dependencies(object_id)
-        obj_props = self.extract_fields(type1_id, type2_id)
-        obj_handles = self.extract_handles(dep_id)
-
-        return obj_props, obj_handles
-
     def read_object_arrays(
-        self, object_id: int, class_id: int, dims: List[int]
+        self, object_ids: np.ndarray, class_id: int, dims: List[int]
     ) -> np.ndarray:
         """Reads an object array for a given variable"""
 
         props_list = []
-        handles_list = []
-        total_objects_in_array = np.prod(np.array(dims))
+        for object_id in object_ids:
+            _, type1_id, type2_id, dep_id = self.get_object_dependencies(object_id)
+            obj_props = self.extract_fields(type1_id, type2_id, dep_id)
+            # offsets[6] and offsets[7] are not used
+            # Their purpose is unknown at the moment
 
-        # TODO: Fix loop logic
-        for i in range(object_id - total_objects_in_array + 1, object_id + 1):
-            _, _, _, dep_id = self.get_object_dependencies(object_id)
-            ndeps = dep_id - object_id
-            obj_props, obj_handles = self.read_nested_objects(i)
             props_list.append(obj_props)
-            handles_list.append(obj_handles)
-            i += ndeps
 
         obj_props = np.array(props_list).reshape(dims)
 
         obj_default_props = self.ssdata[-1, 0][class_id, 0]
+        # Pulling default properties directly from the 1 x 1 struct array
+        # Handles empty struct for default properties as well
         obj_default_props = (
             obj_default_props[0, 0]
             if obj_default_props.shape[1] > 0
             else obj_default_props[0]
         )
+
         if self.raw_data:
             # TODO
             # obj_props = convert_to_object(obj_props, obj_default_props)
@@ -275,15 +287,35 @@ class FileWrapper:
         handle_name, class_name = self.get_class_name(class_id)
         if handle_name is not None:
             class_name = f"{handle_name}.{class_name}"
+
+        # Remaining unknown class properties
         u1 = self.ssdata[-3, 0][class_id, 0]
         u2 = self.ssdata[-2, 0][class_id, 0]
 
-        result = np.empty((), dtype=CLASS_DTYPE)
-        result["__class__"] = class_name
-        result["__properties__"] = obj_props
-        result["__handles__"] = obj_handles
-        result["__default_properties__"] = obj_default_props
-        result["__s3__"] = u1
-        result["__s2__"] = u2
+        result = {
+            "__class__": class_name,
+            "__properties__": obj_props,
+            "__default_properties__": obj_default_props,
+            "__s3__": u1,
+            "__s2__": u2,
+        }
 
         return result
+
+
+def get_object_reference(metadata: np.ndarray) -> Tuple[int, int, List[int]]:
+    """Extracts object ID from the data array"""
+    ref = metadata[0, 0]
+    if ref != 0xDD000000:
+        raise ValueError("Invalid object reference. Expected 0xDD000000. Got {ref}")
+
+    ndims = metadata[1, 0]
+    dims = metadata[2 : 2 + ndims, 0]
+    if len(dims) != ndims:
+        raise ValueError("Invalid dimensions. Expected {ndims}. Got {dims}")
+
+    total_objs = np.prod(np.array(dims))
+    object_ids = metadata[2 + ndims : 2 + ndims + total_objs, 0]
+    class_id = metadata[-1, 0]
+
+    return object_ids, class_id, dims
