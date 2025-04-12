@@ -2,6 +2,8 @@ from typing import Any, List, Optional, Tuple
 
 import numpy as np
 
+from .class_parser import convert_to_object
+
 CLASS_DTYPE = [
     ("__class__", "O"),
     ("__properties__", "O"),
@@ -289,15 +291,22 @@ class FileWrapper:
         )
         obj_default_props = self.process_res_array(obj_default_props)
 
-        if self.raw_data:
-            # TODO
-            # obj_props = convert_to_object(obj_props, obj_default_props)
-            pass
-
         handle_name, class_name = self.get_class_name(class_id)
         if handle_name is not None:
             class_name = f"{handle_name}.{class_name}"
-        if self.chars_as_strings:
+
+        # Converts some common MATLAB objects to Python objects
+        if not self.raw_data:
+            obj_props = convert_to_object(
+                obj_props,
+                obj_default_props,
+                class_name,
+                self.byte_order,
+                self.uint16_codec,
+                self.chars_as_strings,
+            )
+
+        if not self.chars_as_strings:
             class_name = np.asarray([class_name])
 
         # Remaining unknown class properties

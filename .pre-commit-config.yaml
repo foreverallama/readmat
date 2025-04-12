@@ -41,5 +41,6 @@ repos:
     hooks:
       - id: mypy
         args: [--ignore-missing-imports]
+        additional_dependencies: [types-pytz==2025.1.0.20250204]
 
 exclude: ^patches/

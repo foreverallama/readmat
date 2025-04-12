@@ -1,8 +1,9 @@
+import warnings
 from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
-import pytz  # type: ignore
+import pytz
 
 # TODO: Add support for following classes:
 # 1. dynamicprops
@@ -12,16 +13,18 @@ import pytz  # type: ignore
 
 class MatDateTime:
     # * Formatting from MATLAB formats not supported yet
-    def __init__(self, obj_dict):
-        self.data = obj_dict.get("data")
-        self.tz = self._extract_string(obj_dict.get("tz", "UTC"))
-        self.fmt = self._extract_string(obj_dict.get("fmt", "%Y-%m-%d %H:%M:%S %Z"))
+    def __init__(self, props, defaults):
+        """Initialize the MatDateTime object"""
 
-    def _extract_string(self, val):
-        if isinstance(val, np.ndarray) and val.size > 0:
-            return val.item()
-        else:
-            return ""
+        self.data = np.array([])
+        self.fmt = np.array("%Y-%m-%d %H:%M:%S %Z")
+        self.tz = np.array("UTC")
+
+        for field in ["data", "fmt", "tz"]:
+            if field in defaults.dtype.names and defaults[field].size > 0:
+                setattr(self, field, defaults[field])
+            if field in props.dtype.names:
+                setattr(self, field, props[field])
 
     def get_datetime(self):
         data_array = np.atleast_1d(self.data)
@@ -40,7 +43,7 @@ class MatDateTime:
         )(real_part, imag_part)
 
         try:
-            tz_obj = pytz.timezone(self.tz)
+            tz_obj = pytz.timezone(self.tz.item())
             dt_local = np.vectorize(lambda dt: dt.astimezone(tz_obj))(dt_utc)
         except pytz.UnknownTimeZoneError:
             dt_local = dt_utc  # Fallback to UTC if invalid timezone
@@ -53,11 +56,12 @@ class MatDateTime:
         if dt_array is None:
             return ""
 
-        if isinstance(dt_array, (list, np.ndarray)):
-            fmt = "%Y-%m-%d %H:%M:%S %Z"  # Custom formats not yet supported
-            return str([dt.strftime(fmt) for dt in dt_array])
+        fmt = "%Y-%m-%d %H:%M:%S %Z"  # Custom formats not yet supported
+        formatted = np.vectorize(lambda dt: dt.strftime(fmt) if dt is not None else "")(
+            dt_array
+        )
 
-        return dt_array.strftime(self.fmt)
+        return np.array2string(formatted, separator=", ")
 
     def __repr__(self):
         return f"MatDatetime(data={self.data}, tz='{self.tz}', fmt='{self.fmt}')"
@@ -75,30 +79,31 @@ class MatDateTime:
 
 class MatDuration:
     # * Formatting from MATLAB formats not supported yet
-    def __init__(self, obj_dict):
-        self.millis = obj_dict.get("millis")
-        self.fmt = self._extract_string(obj_dict.get("fmt", "hh:mm:ss"))
+    def __init__(self, props, defaults):
+        """Initialize the MatDuration object"""
+        self.millis = np.array([])
+        self.fmt = np.array("%Y-%m-%d %H:%M:%S %Z")
 
-    def _extract_string(self, val):
-        if isinstance(val, np.ndarray) and val.size > 0:
-            return val.item()
-        else:
-            return ""
+        for field in ["millis", "fmt"]:
+            if field in defaults.dtype.names:
+                setattr(self, field, defaults[field])
+            if field in props.dtype.names:
+                setattr(self, field, props[field])
 
     def get_duration(self):
         """Calculate (s, m, h, d) based on fmt"""
         if self.millis.size == 0:  # Handle empty case
             return None
-
-        if self.fmt == "s":
+        fmt = self.fmt.item()
+        if fmt == "s":
             return self.millis / 1000  # Seconds
-        elif self.fmt == "m":
+        elif fmt == "m":
             return self.millis / 60000  # Minutes
-        elif self.fmt == "h":
+        elif fmt == "h":
             return self.millis / 3600000  # Hours
-        elif self.fmt == "d":
+        elif fmt == "d":
             return self.millis / 86400000  # Days
-        elif self.fmt == "hh:mm:ss":
+        elif fmt == "hh:mm:ss":
             return self.millis  # Keep in milliseconds, format later in __str__
         else:
             return self.millis  # Default
@@ -111,16 +116,16 @@ class MatDuration:
 
         def format_value(val):
             """Apply proper formatting for string output, with correct negative duration handling."""
-
-            if self.fmt == "s":
+            fmt = self.fmt.item()
+            if fmt == "s":
                 return f"{val:.3f} sec"
-            elif self.fmt == "m":
+            elif fmt == "m":
                 return f"{val:.3f} min"
-            elif self.fmt == "h":
+            elif fmt == "h":
                 return f"{val:.3f} hr"
-            elif self.fmt == "d":
+            elif fmt == "d":
                 return f"{val:.3f} days"
-            elif self.fmt == "hh:mm:ss":
+            elif fmt == "hh:mm:ss":
                 seconds = val / 1000
                 sign = "-" if seconds < 0 else ""
                 seconds = abs(seconds)
@@ -149,8 +154,16 @@ class MatDuration:
             return durations  # If single value, return directly
 
 
-def parse_string(data, byte_order):
-    # Skip data[0], not sure what it flags
+def parse_string(data, byte_order, uint16_codec, chars_as_strings):
+    """Parse string data from MATLAB file"""
+
+    version = data[0, 0]
+    if version != 1:
+        warnings.warn(
+            "String saved from a different MAT-file version. This may work unexpectedly",
+            UserWarning,
+        )
+
     ndims = data[0, 1]
     shape = data[0, 2 : 2 + ndims]
     num_strings = np.prod(shape)
@@ -160,27 +173,36 @@ def parse_string(data, byte_order):
 
     strings = []
     pos = 0
-    encoding = "utf-16-le" if byte_order == "<" else "utf-16-be"
+    # uint16_codec is note used currently
+    encoding = "utf-16-le" if byte_order[0] == "<" else "utf-16-be"
     for char_count in char_counts:
         byte_length = char_count * 2  # UTF-16 encoding
         extracted_string = byte_data[pos : pos + byte_length].decode(encoding)
         strings.append(extracted_string)
         pos += byte_length
 
-    data = np.reshape(strings, shape, order="F")
-
-    return data
+    if chars_as_strings:
+        return np.array(strings, dtype=object).reshape(shape, order="F")
+    return np.reshape(strings, shape, order="F")
 
 
 class MatTable:
-    def __init__(self, obj_dict):
-        self.data = obj_dict.get("data")
-        self.ndims = obj_dict.get("ndims")
-        self.nrows = obj_dict.get("nrows")
-        self.nvars = obj_dict.get("nvars")
-        self.rownames = obj_dict.get("rownames")
-        self.varnames = obj_dict.get("varnames")
-        self.props = obj_dict.get("props")
+    # TODO: Collect cases and fix
+    def __init__(self, props, defaults):
+        self.data = defaults["data"]
+
+        for field in [
+            "data",
+            "ndims",
+            "nrows",
+            "nvars",
+            "rownames",
+            "varnames",
+            "props",
+        ]:
+            if field in props.dtype.names:
+                setattr(self, field, props[field])
+
         self.df = self._build_dataframe()
 
     def __repr__(self):
@@ -192,6 +214,8 @@ class MatTable:
     def _extract_cell_value(self, cell):
         if isinstance(cell, np.ndarray) and cell.dtype == object:
             return cell[0, 0]["__fields__"]
+        if isinstance(cell, dict):
+            return cell["__properties__"]
         return cell
 
     def _build_dataframe(self):
@@ -213,6 +237,7 @@ class MatTable:
 
 
 class MatTimetable:
+    # TODO: Collect cases and fix
     def __init__(self, obj_dict):
         self.any = obj_dict.get("any")[0, 0]
         self.data = self.any["data"]
@@ -253,31 +278,35 @@ class MatTimetable:
         return df
 
 
-def convert_to_object(fields, class_name, byte_order):
+def convert_to_object(
+    props, defaults, class_name, byte_order, uint16_codec, chars_as_strings
+):
     """Converts the object to a Python compatible object"""
-
+    # First unwrap props and defaults
     if class_name == "datetime":
-        obj = MatDateTime(fields)
+        obj = MatDateTime(props[0, 0], defaults)
 
     elif class_name == "duration":
-        obj = MatDuration(fields)
+        obj = MatDuration(props[0, 0], defaults)
 
     elif class_name == "string":
-        if "any" in fields:
+        if "any" in props.dtype.names:
             obj = parse_string(
-                fields["any"],
+                props["any"][0, 0],
                 byte_order=byte_order,
+                uint16_codec=uint16_codec,
+                chars_as_strings=chars_as_strings,
             )
 
     elif class_name == "table":
-        obj = MatTable(fields)
+        obj = MatTable(props[0, 0], defaults)
 
     elif class_name == "timetable":
-        if "any" in fields:
-            obj = MatTimetable(fields)
+        if "any" in props.dtype.names:
+            obj = MatTimetable(props[0, 0], defaults)
 
     else:
         # For all other classes, return raw data
-        obj = fields
+        obj = props
 
     return obj
