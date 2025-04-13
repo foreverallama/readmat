@@ -145,7 +145,11 @@ def load_from_mat(
 
     ssStream = BytesIO(ssdata)
     res, byte_order = read_subsystem(ssStream, **kwargs)
-    ss_fields = res[0, 0].dtype.fields
+
+    # Subsystem is 1 1x1 struct array
+    # TODO: Handle squeezed cases
+    ss_fields = res[0, 0].dtype.names
+
     uint16_codec = kwargs.pop("uint16_codec", sys.getdefaultencoding())
     chars_as_strings = kwargs.pop("chars_as_strings", False)
     if "MCOS" in ss_fields:

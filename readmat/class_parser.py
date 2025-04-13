@@ -11,147 +11,80 @@ import pytz
 # 3. event.proplistener
 
 
-class MatDateTime:
-    # * Formatting from MATLAB formats not supported yet
-    def __init__(self, props, defaults):
-        """Initialize the MatDateTime object"""
+def MatDatetime(props):
+    """Initialize the MatDatetime object"""
 
-        self.data = np.array([])
-        self.fmt = np.array("%Y-%m-%d %H:%M:%S %Z")
-        self.tz = np.array("UTC")
+    if "data" in props.dtype.names:
+        data = props["data"]
+    else:
+        data = np.array([])
+    if "fmt" in props.dtype.names:
+        fmt = props["fmt"]
+    else:
+        fmt = np.array("%Y-%m-%d %H:%M:%S %Z")
+    if "tz" in props.dtype.names:
+        tz = props["tz"]
+    else:
+        tz = np.array("UTC")
+    # Not considering default values for fmt, tz as they are empty
 
-        for field in ["data", "fmt", "tz"]:
-            if field in defaults.dtype.names and defaults[field].size > 0:
-                setattr(self, field, defaults[field])
-            if field in props.dtype.names:
-                setattr(self, field, props[field])
+    if data.size == 0:
+        return np.array([])
 
-    def get_datetime(self):
-        data_array = np.atleast_1d(self.data)
-        # If empty/missing value
-        if data_array.size == 0:
-            return None
+    real_part = data.real.astype("int64")  # milliseconds
+    imag_part = data.imag.astype("int64")  # microseconds
 
-        real_part = data_array.real.astype("int64")  # milliseconds
-        imag_part = data_array.imag.astype("int64")  # microseconds
-
-        # Convert to UTC datetimes
-        dt_utc = np.vectorize(
-            lambda r, i: datetime.fromtimestamp(r / 1000, tz=timezone.utc).replace(
-                microsecond=i
-            )
-        )(real_part, imag_part)
-
-        try:
-            tz_obj = pytz.timezone(self.tz.item())
-            dt_local = np.vectorize(lambda dt: dt.astimezone(tz_obj))(dt_utc)
-        except pytz.UnknownTimeZoneError:
-            dt_local = dt_utc  # Fallback to UTC if invalid timezone
-
-        return dt_local.reshape(self.data.shape)
-
-    def __str__(self):
-        """Return formatted datetime(s) as string, preserving shape."""
-        dt_array = self.get_datetime()
-        if dt_array is None:
-            return ""
-
-        fmt = "%Y-%m-%d %H:%M:%S %Z"  # Custom formats not yet supported
-        formatted = np.vectorize(lambda dt: dt.strftime(fmt) if dt is not None else "")(
-            dt_array
+    # Convert to UTC datetimes
+    dt_utc = np.vectorize(
+        lambda r, i: datetime.fromtimestamp(r / 1000, tz=timezone.utc).replace(
+            microsecond=i
         )
+    )(real_part, imag_part)
 
-        return np.array2string(formatted, separator=", ")
+    try:
+        tz_obj = pytz.timezone(tz.item())
+        dt_local = np.vectorize(lambda dt: dt.astimezone(tz_obj))(dt_utc)
+    except pytz.UnknownTimeZoneError:
+        dt_local = dt_utc  # Fallback to UTC if invalid timezone
 
-    def __repr__(self):
-        return f"MatDatetime(data={self.data}, tz='{self.tz}', fmt='{self.fmt}')"
-
-    def __getitem__(self, index):
-        """Allow indexing to retrieve formatted duration values"""
-        datetime = self.get_datetime()
-        if datetime is None:
-            return None
-        if isinstance(datetime, np.ndarray):
-            return datetime[index]
-        else:
-            return datetime
+    # Format ignored as MATLAB formatting string is not directly supported
+    return np.array(
+        [(dt_local.reshape(data.shape), fmt, tz)],
+        dtype=[("datetime", "O"), ("fmt", "O"), ("tz", "O")],
+    )
 
 
-class MatDuration:
-    # * Formatting from MATLAB formats not supported yet
-    def __init__(self, props, defaults):
-        """Initialize the MatDuration object"""
-        self.millis = np.array([])
-        self.fmt = np.array("%Y-%m-%d %H:%M:%S %Z")
+def MatDuration(props, defaults):
+    """Initialize the MatDuration object"""
+    if "millis" in props.dtype.names:
+        millis = props["millis"]
+    else:
+        millis = np.array([])
+    if "fmt" in props.dtype.names:
+        fmt = props["fmt"]
+    else:
+        fmt = defaults["fmt"].item()
 
-        for field in ["millis", "fmt"]:
-            if field in defaults.dtype.names:
-                setattr(self, field, defaults[field])
-            if field in props.dtype.names:
-                setattr(self, field, props[field])
+    if millis.size == 0:
+        return np.array([])
 
-    def get_duration(self):
-        """Calculate (s, m, h, d) based on fmt"""
-        if self.millis.size == 0:  # Handle empty case
-            return None
-        fmt = self.fmt.item()
-        if fmt == "s":
-            return self.millis / 1000  # Seconds
-        elif fmt == "m":
-            return self.millis / 60000  # Minutes
-        elif fmt == "h":
-            return self.millis / 3600000  # Hours
-        elif fmt == "d":
-            return self.millis / 86400000  # Days
-        elif fmt == "hh:mm:ss":
-            return self.millis  # Keep in milliseconds, format later in __str__
-        else:
-            return self.millis  # Default
+    if fmt == "s":
+        count = millis / 1000  # Seconds
+    elif fmt == "m":
+        count = millis / 60000  # Minutes
+    elif fmt == "h":
+        count = millis / 3600000  # Hours
+    elif fmt == "d":
+        count = millis / 86400000  # Days
+    elif fmt == "hh:mm:ss":
+        count = millis  # Keep in milliseconds, format later in __str__
+    else:
+        count = millis  # Default
 
-    def __str__(self):
-        """Return a formatted string"""
-        durations = self.get_duration()
-        if durations is None:
-            return ""
-
-        def format_value(val):
-            """Apply proper formatting for string output, with correct negative duration handling."""
-            fmt = self.fmt.item()
-            if fmt == "s":
-                return f"{val:.3f} sec"
-            elif fmt == "m":
-                return f"{val:.3f} min"
-            elif fmt == "h":
-                return f"{val:.3f} hr"
-            elif fmt == "d":
-                return f"{val:.3f} days"
-            elif fmt == "hh:mm:ss":
-                seconds = val / 1000
-                sign = "-" if seconds < 0 else ""
-                seconds = abs(seconds)
-                h, rem = divmod(seconds, 3600)
-                m, s = divmod(rem, 60)
-                return f"{sign}{int(h)}:{int(m):02d}:{int(s):02d}"
-            else:
-                return f"{val:.3f} ms"  # Default case
-
-        # Apply formatting while keeping N-D shape
-        formatted = np.vectorize(format_value, otypes=[str])(durations)
-        return np.array2string(formatted, separator=", ")
-
-    def __repr__(self):
-        return f"MatDuration(millis={self.millis}, fmt='{self.fmt}')"
-
-    def __getitem__(self, index):
-        """Allow indexing to retrieve formatted duration values"""
-        durations = self.get_duration()
-        if durations is None:
-            return None
-
-        if isinstance(durations, np.ndarray):
-            return durations[index]  # Preserve shape and index properly
-        else:
-            return durations  # If single value, return directly
+    return np.array(
+        [(count.reshape(props.shape), fmt)],
+        dtype=[("millis", "O"), ("fmt", "O")],
+    )
 
 
 def parse_string(data, byte_order, uint16_codec, chars_as_strings):
@@ -284,7 +217,7 @@ def convert_to_object(
     """Converts the object to a Python compatible object"""
     # First unwrap props and defaults
     if class_name == "datetime":
-        obj = MatDateTime(props[0, 0], defaults)
+        obj = MatDatetime(props[0, 0])
 
     elif class_name == "duration":
         obj = MatDuration(props[0, 0], defaults)
