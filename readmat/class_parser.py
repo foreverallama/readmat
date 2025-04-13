@@ -1,9 +1,7 @@
 import warnings
-from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
-import pytz
 
 # TODO: Add support for following classes:
 # 1. dynamicprops
@@ -14,80 +12,48 @@ import pytz
 def MatDatetime(props):
     """Initialize the MatDatetime object"""
 
-    if "data" in props.dtype.names:
-        data = props["data"]
-    else:
-        data = np.array([])
-    if "fmt" in props.dtype.names:
-        fmt = props["fmt"]
-    else:
-        fmt = np.array("%Y-%m-%d %H:%M:%S %Z")
-    if "tz" in props.dtype.names:
-        tz = props["tz"]
-    else:
-        tz = np.array("UTC")
-    # Not considering default values for fmt, tz as they are empty
-
+    data = props["data"]
     if data.size == 0:
-        return np.array([])
-
-    real_part = data.real.astype("int64")  # milliseconds
-    imag_part = data.imag.astype("int64")  # microseconds
-
-    # Convert to UTC datetimes
-    dt_utc = np.vectorize(
-        lambda r, i: datetime.fromtimestamp(r / 1000, tz=timezone.utc).replace(
-            microsecond=i
-        )
-    )(real_part, imag_part)
-
-    try:
-        tz_obj = pytz.timezone(tz.item())
-        dt_local = np.vectorize(lambda dt: dt.astimezone(tz_obj))(dt_utc)
-    except pytz.UnknownTimeZoneError:
-        dt_local = dt_utc  # Fallback to UTC if invalid timezone
-
-    # Format ignored as MATLAB formatting string is not directly supported
-    return np.array(
-        [(dt_local.reshape(data.shape), fmt, tz)],
-        dtype=[("datetime", "O"), ("fmt", "O"), ("tz", "O")],
-    )
+        return props
+    millis = data.real + data.imag * 1e3
+    props["data"] = millis.astype("datetime64[ms]")
+    return props
 
 
 def MatDuration(props, defaults):
     """Initialize the MatDuration object"""
-    if "millis" in props.dtype.names:
-        millis = props["millis"]
-    else:
-        millis = np.array([])
+
+    millis = props["millis"]
+    if millis.size == 0:
+        return props
+
     if "fmt" in props.dtype.names:
         fmt = props["fmt"]
     else:
-        fmt = defaults["fmt"].item()
-
-    if millis.size == 0:
-        return np.array([])
+        fmt = defaults["fmt"]
 
     if fmt == "s":
         count = millis / 1000  # Seconds
+        dur = count.astype("timedelta64[s]")
     elif fmt == "m":
         count = millis / 60000  # Minutes
+        dur = count.astype("timedelta64[m]")
     elif fmt == "h":
         count = millis / 3600000  # Hours
+        dur = count.astype("timedelta64[h]")
     elif fmt == "d":
         count = millis / 86400000  # Days
-    elif fmt == "hh:mm:ss":
-        count = millis  # Keep in milliseconds, format later in __str__
+        dur = count.astype("timedelta64[D]")
     else:
-        count = millis  # Default
+        count = millis
+        dur = count.astype("datetime64[ms]")
+        # Default case
 
-    return np.array(
-        [(count.reshape(props.shape), fmt)],
-        dtype=[("millis", "O"), ("fmt", "O")],
-    )
+    props["millis"] = dur
+    return props
 
 
-def parse_string(data, byte_order, uint16_codec, chars_as_strings):
+def parse_string(data, byte_order, uint16_codec=None, chars_as_strings=False):
     """Parse string data from MATLAB file"""
 
     version = data[0, 0]
