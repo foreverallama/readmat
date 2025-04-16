@@ -64,7 +64,7 @@ This subelement specifies the name assigned to the array, as an array of signed,
 
 ### Type System Name
 
-This subelement identifies the data element as a `MCOS` or Matlab Class Object System. The value of this field is `MCOS` and always uses the _small data element_ format (refer documentation).
+This subelement identifies the type system of the `mxOPAQUE_CLASS` data element as `miINT8` characters. For datatypes like `datetime`, `string`, and most user-defined objects, the type system is `MCOS` or MATLAB Class Object System. Another known type system is `java` for Java objects.
 
 ### Class Name
 
