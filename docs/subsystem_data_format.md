@@ -53,19 +53,17 @@ This is a basic version of the file header of the actual MAT-file, mentioning on
 
 ## Data Element 1: mxStruct_CLASS
 
-The first data element is of `mxSTRUCT_CLASS`. This is a `1 x 1` struct array which has fields set based on the variables in the MAT-file. For `mxOPAQUE_CLASS` objects, this will contain a field `MCOS`. For `java` objects, this will contain a field `java`.
-
-The `MCOS` field contains an array of type `mxOPAQUE_CLASS`, which contains all the information we need. The structure of `java` has not yet been studied.
+The first data element is of `mxSTRUCT_CLASS`. This is a `1 x 1` struct array which has fields set based on the type system of the `mxOPAQUE_CLASS` variables in the MAT-file. The field names of this struct is the same as the type system names. For example, `MCOS` types will contain a field `MCOS`. For `java` types, this will contain a field `java`.
 
 ### Data Subelement: mxOPAQUE_CLASS
 
-This subelement is quite similar to the data element that appears in the normal part of the MAT-file, but with some key differences:
+The `MCOS` field contains an array of type `mxOPAQUE_CLASS`, which contains all the information we need. This subelement is quite similar to the data element that appears in the normal part of the MAT-file, but with some key differences:
 
 - The subelement does not have an array name
 - The subelement is of class type `FileWrapper__`
-- The object metadata is **not** a `mxUINT32` array, but instead a `mxCELL_CLASS` array
+- The object metadata is a `mxCELL_CLASS` array
 
-This cell array is what we need to look at closely. The cell array has a dimension `(N + 5, 1)`, where $N = \sum_{\text{objects}} \text{(number of properties of object)}$. The first cell in the array contains some metadata. The second cell is empty of size `0 bytes`, and is most likely used for padding. The third cell onwards contains the contents of each field for every object in the MAT-file, stored as a regular data element. Finally, there are 3 more cells in the array that appear at the end, the purpose of which is not known yet. This structure is visualized below.
+This cell array is what we need to look at closely. The cell array has a dimension `(N + 5, 1)`, where $N = \sum_{\text{objects}} \text{(number of properties of object)}$. The first cell in the array contains some metadata. The second cell is empty of size `0 bytes`, whose purpose is unknown. The third cell onwards contains the contents of each field for every object in the MAT-file, stored as a regular data element. Finally, there are 3 more cells in the array that appear at the end, which contain some properties of each class in the MAT-file. This structure is visualized below.
 
 | Cell Array Index | fieldContentID | Cell Content |
 |-----------|-----------|-----------|
@@ -78,21 +76,18 @@ This cell array is what we need to look at closely. The cell array has a dimensi
 | N + 3 | N | Object Property Contents |
 | N + 4 | - | Unknown |
 | N + 5 | - | Unknown |
-| N + 6 | - | Unknown |
-
-Note the column `fieldContentID`. The cell containing field contents are also IDed indexed from `0`. This will be used later to link field contents to its corresponding field name.
+| N + 6 | - | Default Class Properties |
 
 ### Cell 1 - Linking Metadata
 
-The data in this cell is stored as a `mxUINT8` data element. However, the actual data consists of a combination of `uint8` values and `uint32` values, and must be parsed as raw data. The contents consist of a large series of different types of metadata, ordered as follows:
+The data in this cell is stored as a `mxUINT8` data element. However, the actual data consists of a combination of `uint8` integers and `uint32` integers. The contents consist of a large series of different types of metadata, ordered as follows:
 
-- `Header`: 32-bit integer with unknown significance. It's value is always `4`
-- `num_fields_classes`: 32-bit integer indicating the total number of unique fields and classes of all objects in the MAT-file
-- `offsets`: A list of **eight** 32-bit integers, which are byte markers to different regions within this cell. The byte marker is relative to the start of the cell's data
-- `names`: A list of null-terminated `int8` strings indicating all field and class names (in no particular order)
-- A bunch of different regions indicated by `offsets`
+- `Version Indicator`: 32-bit integer indicating the version of `FileWrapper__` metadata. Afaik, the latest version is `4`.
+- `num_strings`: 32-bit integer indicating the total number of unique fields and classes of all objects in the MAT-file
+- `offsets`: A list of **eight** 32-bit integers, which are byte markers to different regions within this cell. The byte marker is relative to the start of the cell's data.
+- `names`: A list of null-terminated `int8` characters indicating all field and class names (in no particular order)
 
-#### Region 1: Class Identifier Metadata
+#### Region 1: Class Identifiers
 
 - The start of this region is indicated by the first offset value
 - This region consists of blocks of **four** 32-bit integers in the format `(handle_class_name_index, class_name_index, 0, 0)`
@@ -101,7 +96,7 @@ The data in this cell is stored as a `mxUINT8` data element. However, the actual
 - The first block is always all zeros
 - The blocks are ordered by `classID`
 
-#### Region 3: Object Identifier Metadata
+#### Region 3: Object Identifiers
 
 - The start of this region is indicated by the third offset value
 - This region consists of blocks of **six** 32-bit integers in the format `(classID, 0, 0, type1_ID, type2_ID, object_dependency_id)`
@@ -110,9 +105,9 @@ The data in this cell is stored as a `mxUINT8` data element. However, the actual
 - `classID` is the same values assigned to the object array in the normal MAT-file
 - `object_dependency_id` is used to identify nested objects. The value in this field indicates the `object_id` **upto** which it depends on.
 - `type1ID` and `type2ID` are linked to different types of objects. For example, `string` is a `type1` object, whereas `datetime` is a `type2` object
-- Each `type1` and `type2` object is assigned a unique ID, in order of `objectID`, starting from zero
+- Each `type1` and `type2` object is assigned a unique ID, in order of `objectID`, starting from one
 
-#### Region 2: Type 1 Object Metadata
+#### Region 2: Type 1 Object Property Identifiers
 
 This region stores field contents for classes using the `any` property.
 
@@ -128,7 +123,7 @@ This region stores field contents for classes using the `any` property.
     - `field_type = 1` indicates a property
     - `field_type = 2` indicates an attribute like `Hidden` or `Constant`, etc.
   - `field_value` depends on `field_type`
-    - If `field_type = 1`, `field_value` contains the index of the cell array containing the property contents
+    - If `field_type = 1`, `field_value` contains the index of the cell in the cell array containing the property contents. The indexing here starts from zero. However, it should be noted that the 0th index points to Cell 3 of the cell array.
     - If `field_type = 2`, `field_value` contains a logical value, i.e., either `true` or `false`
 
 #### Region 4: Type 2 Object Metadata
@@ -148,11 +143,13 @@ This region links objects to its corresponding handle superclass objects.
 
 #### Other Regions
 
-The 6th and 7th offset values indicate other metadata regions whose purpose is unknown. The last offset points to the end of this cell.
+The 6th and 7th offset values indicate other metadata regions whose purpose is unknown. These offsets are not present in earlier version of `FileWrapper__` metadata, and is probably related to the handling of certain special types of objects.
+
+The last offset points to the end of this cell.
 
 ### Cell 2 - Padding
 
-Cell 2 is always tagged as `miMATRIX` of `0 bytes`. This is most likely used to pad between metadata cells and field content cells.
+Cell 2 is always tagged as `miMATRIX` of `0 bytes`. This is most likely used to pad between metadata cells and field content cells. It's actual purpose is unknown.
 
 ### Field Content Cells
 
@@ -168,10 +165,6 @@ There are always three more cells at the end of the array, which appear after al
 
 ## Data Element 2: Character Array
 
-Finally, the last part of the subsystem data contains another data element which is stored as a `mxUINT8` character array. However, the contents of this array is again structured like a mini-MAT file like the subsystem data itself.
-
-The data within this element contains a 4 byte header indicating MAT-file version and Endianness, and a single data element of `mxSTRUCT` type. This data element contains a single field `MCOS`. However, the contents of this field are empty.
-
-My guess is MATLAB is using some kind of recursive function to write the subsystem data, popping out objects from a buffer as they are written, resulting in this empty data element at the end.
+Finally, the last part of the subsystem data contains another data element which is stored as a `mxUINT8` character array. However, the contents of this array is again structured like a mini-MAT file like the subsystem data itself, except as an empty struct. Note that this element is not always present. My guess is MATLAB is using some kind of recursive function to write the subsystem data, popping out objects from a buffer as they are written, resulting in this empty data element at the end.
 
 There are still quite a few unknowns which could use some reverse engineering. I have detailed these in [unknowns.md](./unknowns.md). If anyone wants to contribute to this, pelase do open an issue!
