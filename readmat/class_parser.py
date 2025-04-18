@@ -1,4 +1,6 @@
 import warnings
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
@@ -9,29 +11,50 @@ import pandas as pd
 # 3. event.proplistener
 
 
+def get_tz_offset(tz):
+    try:
+        tzinfo = ZoneInfo(tz)
+        utc_offset = tzinfo.utcoffset(datetime.now())
+        if utc_offset is not None:
+            offset = int(utc_offset.total_seconds() * 1000)
+        else:
+            offset = 0
+    except Exception as e:
+        warnings.warn(
+            f"Could not get timezone offset for {tz}: {e}. Defaulting to UTC."
+        )
+        offset = 0
+    return offset
+
+
 def MatDatetime(props):
     """Initialize the MatDatetime object"""
 
-    data = props["data"]
+    data = props[0, 0].get("data", np.array([]))
     if data.size == 0:
+        props[0, 0]["data"] = np.array([], dtype="datetime64[ms]")
         return props
-    millis = data.real + data.imag * 1e3
-    props["data"] = millis.astype("datetime64[ms]")
+    tz = props[0, 0].get("tz", None)
+    if tz.size > 0:
+        offset = get_tz_offset(tz.item())
+    else:
+        offset = 0
+
+    millis = data.real + data.imag * 1e3 + offset
+
+    props[0, 0]["data"] = millis.astype("datetime64[ms]")
     return props
 
 
-def MatDuration(props, defaults):
+def MatDuration(props):
     """Initialize the MatDuration object"""
 
-    millis = props["millis"]
+    millis = props[0, 0]["millis"]
     if millis.size == 0:
+        props[0, 0]["millis"] = np.array([], dtype="timedelta64[ms]")
         return props
 
-    if "fmt" in props.dtype.names:
-        fmt = props["fmt"]
-    else:
-        fmt = defaults["fmt"]
-
+    fmt = props[0, 0].get("fmt", None)
     if fmt == "s":
         count = millis / 1000  # Seconds
         dur = count.astype("timedelta64[s]")
@@ -46,15 +69,21 @@ def MatDuration(props, defaults):
         dur = count.astype("timedelta64[D]")
     else:
         count = millis
-        dur = count.astype("datetime64[ms]")
+        dur = count.astype("timedelta64[ms]")
         # Default case
 
-    props["millis"] = dur
+    props[0, 0]["millis"] = dur
     return props
 
 
-def parse_string(data, byte_order, uint16_codec=None, chars_as_strings=False):
+def MatString(props, byte_order):
     """Parse string data from MATLAB file"""
+
+    data = props[0, 0].get("any", np.array([]))
+    if data.size == 0:
+        data = np.array([[]], dtype="U")
+        props[0, 0]["any"] = data
+        return props
 
     version = data[0, 0]
     if version != 1:
@@ -72,7 +101,6 @@ def parse_string(data, byte_order, uint16_codec=None, chars_as_strings=False):
 
     strings = []
     pos = 0
-    # uint16_codec is note used currently
     encoding = "utf-16-le" if byte_order[0] == "<" else "utf-16-be"
     for char_count in char_counts:
         byte_length = char_count * 2  # UTF-16 encoding
@@ -80,9 +108,9 @@ def parse_string(data, byte_order, uint16_codec=None, chars_as_strings=False):
         strings.append(extracted_string)
         pos += byte_length
 
-    if chars_as_strings:
-        return np.array(strings, dtype=object).reshape(shape, order="F")
-    return np.reshape(strings, shape, order="F")
+    arr_str = np.reshape(strings, shape, order="F")
+    props[0, 0]["any"] = arr_str
+    return props
 
 
 class MatTable:
@@ -177,32 +205,24 @@ class MatTimetable:
         return df
 
 
-def convert_to_object(
-    props, defaults, class_name, byte_order, uint16_codec, chars_as_strings
-):
+def convert_to_object(props, class_name, byte_order):
     """Converts the object to a Python compatible object"""
-    # First unwrap props and defaults
+
     if class_name == "datetime":
-        obj = MatDatetime(props[0, 0])
+        obj = MatDatetime(props)
 
     elif class_name == "duration":
-        obj = MatDuration(props[0, 0], defaults)
+        obj = MatDuration(props)
 
     elif class_name == "string":
-        if "any" in props.dtype.names:
-            obj = parse_string(
-                props["any"][0, 0],
-                byte_order=byte_order,
-                uint16_codec=uint16_codec,
-                chars_as_strings=chars_as_strings,
-            )
+        obj = MatString(props, byte_order)
 
-    elif class_name == "table":
-        obj = MatTable(props[0, 0], defaults)
+    # elif class_name == "table":
+    #     obj = MatTable(props[0, 0], defaults)
 
-    elif class_name == "timetable":
-        if "any" in props.dtype.names:
-            obj = MatTimetable(props[0, 0], defaults)
+    # elif class_name == "timetable":
+    #     if "any" in props.dtype.names:
+    #         obj = MatTimetable(props[0, 0], defaults)
 
     else:
         # For all other classes, return raw data
