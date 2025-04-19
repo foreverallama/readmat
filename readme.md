@@ -12,7 +12,7 @@ The `readmat` module provides tools for reading and parsing `.mat` files, partic
 - `timetable`
 - User-defined objects
 
-**Note**: `load_from_mat()` uses a modified fork of `scipy`. The fork currently contains a few minor changes to `scipy.io` to return variable names and object metadata for all objects in a MAT-file. This change is available [on Github](https://github.com/foreverallama/scipy/tree/readmat-scipy) and can be installed directly from the branch. You can also view the changes under `patches/scipy_changes.patch` and apply it manually. Note that you might need to rebuild as parts of the Cython code was modified.
+**Note**: `load_from_mat()` uses a modified fork of `scipy`. The fork currently contains a few minor changes to `scipy.io` to return variable names and object metadata for all objects in a MAT-file. This change is available [on Github](https://github.com/foreverallama/scipy/tree/readmat-scipy) and can be installed directly from the branch. You can also view the changes under `patches/scipy_changes.patch` and apply it manually. Note that you might need to rebuild as parts of the Cython code was modified. Follow the instruction on the [official SciPy documentation](https://scipy.github.io/devdocs/building/index.html#building-from-source).
 
 ## Usage
 
