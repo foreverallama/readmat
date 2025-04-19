@@ -1,6 +1,6 @@
-# ReadMat Module
+# Mat-IO Module
 
-The `readmat` module provides tools for reading and parsing `.mat` files, particularly for extracting contents from user-defined objects or MATLAB datatypes such as `datetime`, `table` and `string`. It uses a wrapper built around `scipy.io` to extract raw subsystem data from MAT-files, which is then parsed and interpreted to extract object data. It includes utilities for reading MATLAB objects like `datetime` and `duration` both as raw data or their respective Python objects.
+The `mat-io` module provides tools for reading and parsing `.mat` files, particularly for extracting contents from user-defined objects or MATLAB datatypes such as `datetime`, `table` and `string`. It uses a wrapper built around `scipy.io` to extract raw subsystem data from MAT-files, which is then parsed and interpreted to extract object data. It includes utilities for reading MATLAB objects like `datetime` and `duration` both as raw data or their respective Python objects.
 
  Currently supported MATLAB objects are:
 
@@ -19,13 +19,13 @@ The `readmat` module provides tools for reading and parsing `.mat` files, partic
 Clone and install using pip:
 
 ```bash
-git clone https://github.com/foreverallama/readmat.git
+git clone https://github.com/foreverallama/matio.git
 pip install .
 # OR
-pip install git+https://github.com/foreverallama/readmat.git
+pip install git+https://github.com/foreverallama/matio.git
 ```
 
-### `readmat.load_from_mat(file_path, raw_data=False, mdict=None, *, spmatrix=True, **kwargs)`
+### `matio.load_from_mat(file_path, raw_data=False, mdict=None, *, spmatrix=True, **kwargs)`
 
 #### Parameters:
 
@@ -65,7 +65,7 @@ Currently, the following arguments are not supported:
 To read subsystem data from a `.mat` file:
 
 ```python
-from readmat import load_from_mat
+from matio import load_from_mat
 
 file_path = "path/to/your/file.mat"
 data = load_from_mat(file_path)

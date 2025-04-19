@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pytest
 
-from readmat import load_from_mat
+from matio import load_from_mat
 
 
 @pytest.mark.parametrize(
