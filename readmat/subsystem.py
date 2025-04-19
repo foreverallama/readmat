@@ -1,7 +1,7 @@
 import numpy as np
 
-from .class_parser import convert_to_object
-
+from .class_parser import convert_to_object, wrap_enumeration_instance
+import warnings
 
 class SubsystemReader:
     def __init__(self, ss_array, byte_order, raw_data=False):
@@ -143,27 +143,34 @@ class SubsystemReader:
         return handles
 
     def find_object_reference(self, arr, path=()):
-        if isinstance(arr, np.ndarray):
-            if arr.dtype == object:
-                # Iterate through cell arrays
-                for idx in np.ndindex(arr.shape):
-                    cell_item = arr[idx]
-                    if check_object_reference(cell_item):
-                        arr[idx] = self.read_mcos_object(cell_item)
-                    else:
-                        self.find_object_reference(cell_item, path + (idx,))
-                    # Path to keep track of the current index
-            elif arr.dtype.names:
-                # Struct array
-                for idx in np.ndindex(arr.shape):
-                    for name in arr.dtype.names:
-                        field_val = arr[idx][name]
-                        if check_object_reference(field_val):
-                            arr[idx][name] = self.read_mcos_object(field_val)
-                        else:
-                            self.find_object_reference(field_val, path + (idx, name))
-            elif check_object_reference(arr):
+        if not isinstance(arr, np.ndarray):
+            return arr
+        
+        if arr.dtype == object:
+            # Iterate through cell arrays
+            for idx in np.ndindex(arr.shape):
+                cell_item = arr[idx]
+                if cell_item.dtype == OPAQUE_DTYPE:
+
+                    arr[idx] = self.read_mcos_object(cell_item)
+                if check_object_reference(cell_item):
+                    arr[idx] = self.read_mcos_object(cell_item)
+                else:
+                    self.find_object_reference(cell_item, path + (idx,))
+                # Path to keep track of the current index
+        elif arr.dtype.names:
+            # Struct array
+            if check_object_reference(arr):
                 return self.read_mcos_object(arr)
+            for idx in np.ndindex(arr.shape):
+                for name in arr.dtype.names:
+                    field_val = arr[idx][name]
+                    if check_object_reference(field_val):
+                        arr[idx][name] = self.read_mcos_object(field_val)
+                    else:
+                        self.find_object_reference(field_val, path + (idx, name))
+        elif check_object_reference(arr):
+            return self.read_mcos_object(arr)
 
         return arr
 
@@ -187,8 +194,7 @@ class SubsystemReader:
         field_ids = self.get_ids(obj_type_id, byte_offset, nbytes=12)
         for field_idx, field_type, field_value in field_ids:
             if field_type == 1:
-                # field_content = self.find_object_reference(self.fwrap_vals[field_value])
-                field_content = self.fwrap_vals[field_value]
+                field_content = self.find_object_reference(self.fwrap_vals[field_value])
                 obj_props[self.mcos_names[field_idx - 1]] = field_content
             elif field_type == 2:
                 obj_props[self.mcos_names[field_idx - 1]] = np.array(
@@ -214,6 +220,7 @@ class SubsystemReader:
         obj_props = np.array(props_list).reshape(dims)
 
         obj_default_props = self.fwrap_defaults[2][class_id, 0]
+        obj_default_props = self.find_object_reference(obj_default_props)
         if obj_default_props.size != 0:
             for name in obj_default_props.dtype.names:
                 default_val = obj_default_props[name][0, 0]
@@ -242,48 +249,45 @@ class SubsystemReader:
     def read_mcos_enumeration(self, metadata):
         """Reads enumeration object from the metadata"""
 
-        ref = metadata[0]["EnumerationInstanceTag"]
-        if ref != 0xDD000000:
-            return metadata
+        class_idx = metadata[0, 0]["ClassName"].item()
+        builtin_class_index = metadata[0, 0]["BuiltinClassName"].item()
+        value_name_idx = metadata[0, 0]["ValueNames"]
 
-        class_idx = metadata[0]["ClassName"].item()
-        builtin_class_index = metadata[0]["BuiltinClassName"].item()
-        value_name_idx = metadata[0]["ValueNames"]
-
-        class_name = self.mcos_names[class_idx - 1]
+        handle_name, class_name = self.get_class_name(class_idx)
+        if handle_name is not None:
+            class_name = f"{handle_name}.{class_name}"
         if builtin_class_index != 0:
-            builtin_class_name = self.mcos_names[builtin_class_index - 1]
+            handle_name, builtin_class_name = self.get_class_name(builtin_class_index)
+            if handle_name is not None:
+                builtin_class_name = f"{handle_name}.{builtin_class_name}"
         else:
             builtin_class_name = None
 
-        value_idx = metadata[0]["ValueIndices"]
+        value_idx = metadata[0, 0]["ValueIndices"]
         value_names = [
             self.mcos_names[val - 1] for val in value_name_idx.ravel()
         ]  # Array is N x 1 shape
-        value_names = np.array(value_names).reshape(value_idx.shape)
-
+        value_names = np.array(value_names).reshape(value_idx.shape, order="F")
+        
         enum_array = []
-        mmdata = metadata[0]["Values"]  # Array is N x 1 shape
-        if mmdata.size == 0:
-            enum_array = np.array([])
-        else:
+        mmdata = metadata[0, 0]["Values"]  # Array is N x 1 shape
+        if mmdata.size != 0:
             mmdata_map = mmdata[value_idx]
             for val in np.nditer(mmdata_map, flags=["refs_ok"], op_flags=["readonly"]):
                 obj_array = self.read_normal_mcos(val.item())
                 enum_array.append(obj_array)
-            enum_array = np.array(enum_array).reshape(value_idx.shape)
-
-        metadata[0]["ValueNames"] = value_names
-        metadata[0]["Values"] = enum_array
-        metadata[0]["ClassName"] = class_name
-        metadata[0]["BuiltinClassName"] = builtin_class_name
+            
+        metadata = wrap_enumeration_instance(enum_array, value_idx.shape)
+        metadata["_ValueNames"] = value_names
+        metadata["_Class"] = class_name
+        metadata["_BuiltinClassName"] = builtin_class_name
+        metadata["_Tag"] = "EnumerationInstance"
+            
         return metadata
 
     def read_normal_mcos(self, metadata):
         """Reads normal MCOS object from the metadata"""
-        if not check_object_reference(metadata.ravel()):
-            return metadata
-
+        
         ndims = metadata[1, 0]
         dims = metadata[2 : 2 + ndims, 0]
         total_objs = np.prod(np.array(dims))
@@ -292,48 +296,63 @@ class SubsystemReader:
         return self.read_object_arrays(object_ids, class_id, dims)
 
     def read_mcos_object(self, metadata):
+        '''Reads MCOS object based on OPAQUE_DTYPE CONTENTS'''
         if metadata.dtype.names is not None:
             if "EnumerationInstanceTag" in metadata.dtype.names:
-                return self.read_mcos_enumeration(metadata.ravel())
+                return self.read_mcos_enumeration(metadata)
             else:
-                raise TypeError("Unknown metadata type {metadata.dtype}")
+                warnings.warn("Couldn't read MCOS object type, returning object metadata", UserWarning)
+                return metadata
 
         elif metadata.dtype == np.uint32:
             return self.read_normal_mcos(metadata)
 
         return metadata
 
+def check_enumeration_instance_tag(metadata):
+    # Update to check for enumeration instances
+    if metadata.dtype.names is not None:
+        if "EnumerationInstanceTag" in metadata.dtype.names:
+            if metadata[0, 0]["EnumerationInstanceTag"] == 0xDD000000:
+                return True
+    return False
 
 def check_object_reference(metadata):
     """Extracts object ID from the data array"""
-    # Update to check for enumeration instances
-    if not isinstance(metadata, np.ndarray) or not isinstance(metadata, np.uint32):
+    if not isinstance(metadata, np.ndarray):
         return False
+    
+    if check_enumeration_instance_tag(metadata):
+        return True
+    
+    if metadata.dtype != np.uint32:
+        return False
+    
     if metadata.size < 6:
         return False
-    if len(metadata.shape) < 2 or metadata.shape[1] != 1:
+    if len(metadata.shape) != 2 or metadata.shape[1] != 1:
         return False
 
-    ref = metadata[0]
+    ref = metadata[0,0]
     if ref != 0xDD000000:
         return False
 
-    ndims = metadata[1]
+    ndims = metadata[1,0]
     if ndims <= 1:
         return False
 
-    dims = metadata[2 : 2 + ndims]
+    dims = metadata[2 : 2 + ndims, 0]
     total_objs = np.prod(np.array(dims))
     if total_objs <= 0:
         return False
 
-    object_ids = metadata[2 + ndims : 2 + ndims + total_objs]
+    object_ids = metadata[2 + ndims : 2 + ndims + total_objs, 0]
     if np.any(object_ids <= 0):
         return False
     if object_ids.size + ndims + 3 != metadata.shape[0]:
         return False
 
-    class_id = metadata[-1]
+    class_id = metadata[-1, 0]
     if class_id <= 0:
         return False
     return True

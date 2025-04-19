@@ -229,3 +229,13 @@ def convert_to_object(props, class_name, byte_order):
         obj = props
 
     return obj
+
+def wrap_enumeration_instance(enum_array, shapes):
+    """Wraps enumeration instance data into a dictionary"""
+    wrapped_dict = {"_Values": np.empty(shapes, dtype=object)}  
+    if len(enum_array) == 0:
+        wrapped_dict["_Values"] = np.array([], dtype=object)
+    else:
+        enum_props = [item.get("_Props", np.array([]))[0, 0] for item in enum_array]
+        wrapped_dict["_Values"] = np.array(enum_props).reshape(shapes, order="F")
+    return wrapped_dict

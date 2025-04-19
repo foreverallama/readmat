@@ -68,6 +68,34 @@ def get_function_workspace(
     ssdata = matfile_dict.pop("__function_workspace__", None)
     return matfile_dict, ssdata
 
+def find_opaque_dtype(arr, subsystem, path=()):
+        
+        if not isinstance(arr, np.ndarray):
+            return arr
+        
+        if arr.dtype == object:
+            # Iterate through cell arrays
+            for idx in np.ndindex(arr.shape):
+                cell_item = arr[idx]
+                if cell_item.dtype == OPAQUE_DTYPE:
+                    arr[idx] = subsystem.read_mcos_object(cell_item)
+                else:
+                    find_opaque_dtype(cell_item, subsystem, path + (idx,))
+                # Path to keep track of the current index
+        elif arr.dtype.names:
+            # Struct array
+            for idx in np.ndindex(arr.shape):
+                for name in arr.dtype.names:
+                    field_val = arr[idx][name]
+                    if field_val.dtype == OPAQUE_DTYPE:
+                        arr[idx][name] = subsystem.read_mcos_object(field_val)
+                    else:
+                        find_opaque_dtype(field_val, subsystem, path + (idx, name))
+        elif arr.dtype == OPAQUE_DTYPE:
+            return subsystem.read_mcos_object(arr)
+
+        return arr
+
 
 def load_from_mat(
     file_path: str, mdict=None, raw_data: bool = False, *, spmatrix=True, **kwargs
