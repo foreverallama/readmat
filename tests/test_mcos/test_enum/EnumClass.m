@@ -6,8 +6,8 @@ classdef EnumClass
       enum1 (1)
       enum2 (2)
       enum3 (3)
-      enum4 (4) 
-      enum5 (5) 
+      enum4 (4)
+      enum5 (5)
       enum6 (6)
    end
    methods

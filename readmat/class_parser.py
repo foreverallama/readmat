@@ -12,6 +12,12 @@ import pandas as pd
 
 
 def get_tz_offset(tz):
+    """Get timezone offset in milliseconds
+    Inputs:
+        1. tz (str): Timezone string
+    Returns:
+        1. offset (int): Timezone offset in milliseconds
+    """
     try:
         tzinfo = ZoneInfo(tz)
         utc_offset = tzinfo.utcoffset(datetime.now())
@@ -28,7 +34,9 @@ def get_tz_offset(tz):
 
 
 def MatDatetime(props):
-    """Initialize the MatDatetime object"""
+    """Convert MATLAB datetime to Python datetime
+    Datetime returned as numpy.datetime64[ms]
+    """
 
     data = props[0, 0].get("data", np.array([]))
     if data.size == 0:
@@ -47,7 +55,9 @@ def MatDatetime(props):
 
 
 def MatDuration(props):
-    """Initialize the MatDuration object"""
+    """Convert MATLAB duration to Python timedelta
+    Duration returned as numpy.timedelta64
+    """
 
     millis = props[0, 0]["millis"]
     if millis.size == 0:
@@ -77,7 +87,14 @@ def MatDuration(props):
 
 
 def MatString(props, byte_order):
-    """Parse string data from MATLAB file"""
+    """Parse string data from MATLAB file
+    Strings are stored within a uint64 array with the following format:
+        1. version
+        2. ndims
+        3. shape
+        4. char_counts
+        5. List of null-terminated strings as uint16 integers
+    """
 
     data = props[0, 0].get("any", np.array([]))
     if data.size == 0:
@@ -230,9 +247,10 @@ def convert_to_object(props, class_name, byte_order):
 
     return obj
 
+
 def wrap_enumeration_instance(enum_array, shapes):
     """Wraps enumeration instance data into a dictionary"""
-    wrapped_dict = {"_Values": np.empty(shapes, dtype=object)}  
+    wrapped_dict = {"_Values": np.empty(shapes, dtype=object)}
     if len(enum_array) == 0:
         wrapped_dict["_Values"] = np.array([], dtype=object)
     else:
