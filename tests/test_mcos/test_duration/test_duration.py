@@ -119,7 +119,7 @@ from matio import load_from_mat
         "duration-empty",
     ],
 )
-def test_load_datetime(expected_array, file_name, var_name):
+def test_load_duration(expected_array, file_name, var_name):
     file_path = os.path.join(os.path.dirname(__file__), file_name)
     matdict = load_from_mat(file_path, raw_data=False)
 
