@@ -1,6 +1,6 @@
 # Mat-IO Module
 
-The `mat-io` module provides tools for reading and parsing `.mat` files, particularly for extracting contents from user-defined objects or MATLAB datatypes such as `datetime`, `table` and `string`. It uses a wrapper built around `scipy.io` to extract raw subsystem data from MAT-files, which is then parsed and interpreted to extract object data. It includes utilities for reading MATLAB objects like `datetime` and `duration` both as raw data or their respective Python objects.
+The `mat-io` module provides tools for reading `.mat` files, particularly for extracting contents from user-defined objects or MATLAB datatypes such as `datetime`, `table` and `string`. It uses a wrapper built around `scipy.io` to extract raw subsystem data from MAT-files, which is then parsed and interpreted to extract object data. It includes utilities for reading MATLAB objects like `datetime` and `duration` both as raw data or their respective Python objects.
 
  Currently supported MATLAB objects are:
 
@@ -11,6 +11,8 @@ The `mat-io` module provides tools for reading and parsing `.mat` files, particu
 - `table`
 - `timetable`
 - User-defined objects
+
+Currently `mat-io` only supports be reading MAT-files. Support for writing to MAT-files is planned.
 
 **Note**: `load_from_mat()` uses a modified fork of `scipy`. The fork currently contains a few minor changes to `scipy.io` to return variable names and object metadata for all objects in a MAT-file. This change is available [on Github](https://github.com/foreverallama/scipy/tree/readmat-scipy) and can be installed directly from the branch. You can also view the changes under `patches/scipy_changes.patch` and apply it manually. Note that you might need to rebuild as parts of the Cython code was modified. Follow the instruction on the [official SciPy documentation](https://scipy.github.io/devdocs/building/index.html#building-from-source).
 
