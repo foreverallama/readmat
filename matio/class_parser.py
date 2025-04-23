@@ -42,8 +42,7 @@ class MatTime:
 
         data = props[0, 0].get("data", np.array([]))
         if data.size == 0:
-            props[0, 0]["data"] = np.array([], dtype="datetime64[ms]")
-            return props
+            return np.array([], dtype="datetime64[ms]")
         tz = props[0, 0].get("tz", None)
         if tz.size > 0:
             offset = MatTime.get_tz_offset(tz.item())
@@ -52,8 +51,7 @@ class MatTime:
 
         millis = data.real + data.imag * 1e3 + offset
 
-        props[0, 0]["data"] = millis.astype("datetime64[ms]")
-        return props
+        return millis.astype("datetime64[ms]")
 
     @staticmethod
     def toDuration(props):
@@ -63,8 +61,7 @@ class MatTime:
 
         millis = props[0, 0]["millis"]
         if millis.size == 0:
-            props[0, 0]["millis"] = np.array([], dtype="timedelta64[ms]")
-            return props
+            return np.array([], dtype="timedelta64[ms]")
 
         fmt = props[0, 0].get("fmt", None)
         if fmt == "s":
@@ -84,8 +81,7 @@ class MatTime:
             dur = count.astype("timedelta64[ms]")
             # Default case
 
-        props[0, 0]["millis"] = dur
-        return props
+        return dur
 
 
 class MatString:
@@ -132,62 +128,50 @@ class MatString:
 
 class MatTables:
     @staticmethod
-    def get_time_data(coldata):
+    def get_col_data(coldata):
         if isinstance(coldata, np.ndarray):
-            # Return numpy arrays natively
+            # Unravel numpy arrays
             return coldata.ravel()
-        elif isinstance(coldata, dict):
-            # Extract datetime or duration from table
-            class_name = coldata.get("_Class")
-            if class_name == "datetime":
-                coldata = coldata.get("_Props")[0, 0].get("data")
-            if class_name == "duration":
-                coldata = coldata.get("_Props")[0, 0].get("millis")
-            return coldata
         return coldata
 
     @staticmethod
-    def add_mat_props(df, tab_props, nvars):
-        desc = tab_props["Description"]
-        if desc.size > 0:
-            df.attrs["Description"] = desc.item()
-        var_desc = tab_props["VariableDescriptions"]
-        if var_desc.size > 0:
-            var_desc = [s for s in var_desc.ravel()]
-            if len(var_desc) == nvars:
-                df.attrs["VariableDescriptions"] = var_desc
-        var_units = tab_props["VariableUnits"]
-        if var_units.size > 0:
-            var_units = [s for s in var_units.ravel()]
-            if len(var_units) == nvars:
-                df.attrs["VariableUnits"] = var_units
-        var_continuity = tab_props["VariableContinuity"]
-        if var_continuity.size > 0:
-            var_continuity = [s for s in var_continuity.ravel()]
-            if len(var_continuity) == nvars:
-                df.attrs["VariableContinuity"] = var_continuity
-        dim_names = tab_props["DimensionNames"]
-        if dim_names.size > 0:
-            dim_names = [s for s in dim_names.ravel()]
-            if len(dim_names) == nvars:
-                df.attrs["DimensionNames"] = dim_names
-        user_data = tab_props["UserData"]
-        if user_data.size > 0:
-            df.attrs["UserData"] = user_data
+    def add_mat_props(df, tab_props):
+        """Add MATLAB table properties to pandas DataFrame
+        These properties are mostly cell arrays of character vectors
+        """
+
+        df.attrs["Description"] = (
+            tab_props["Description"].item() if tab_props["Description"].size > 0 else ""
+        )
+        df.attrs["VariableDescriptions"] = [
+            s.item() if s.size > 0 else ""
+            for s in tab_props["VariableDescriptions"].ravel()
+        ]
+        df.attrs["VariableUnits"] = [
+            s.item() if s.size > 0 else "" for s in tab_props["VariableUnits"].ravel()
+        ]
+        df.attrs["VariableContinuity"] = [
+            s.item() if s.size > 0 else ""
+            for s in tab_props["VariableContinuity"].ravel()
+        ]
+        df.attrs["DimensionNames"] = [
+            s.item() if s.size > 0 else "" for s in tab_props["DimensionNames"].ravel()
+        ]
+        df.attrs["UserData"] = tab_props["UserData"]
 
         return df
 
     @staticmethod
-    def toDataFrame(props):
+    def toDataFrame(props, add_table_attrs=True):
         data = props[0, 0]["data"]
-        nrows = int(props[0, 0]["nrows"])
-        nvars = int(props[0, 0]["nvars"])
+        nrows = int(props[0, 0]["nrows"].item())
+        nvars = int(props[0, 0]["nvars"].item())
         varnames = props[0, 0]["varnames"]
         rownames = props[0, 0]["rownames"]
         rows = {}
         for i in range(nvars):
             coldata = data[0, i]
-            coldata = MatTables.get_time_data(coldata)
+            coldata = MatTables.get_col_data(coldata)
             rows[varnames[0, i].item()] = coldata
 
         df = pd.DataFrame(rows)
@@ -197,7 +181,10 @@ class MatTables:
                 df.index = rownames
 
         tab_props = props[0, 0]["props"][0, 0]
-        df = MatTables.add_mat_props(df, tab_props, nvars)
+        if add_table_attrs:
+            # Since pandas lists this as experimental, flag so we can switch off if it breaks
+            df = MatTables.add_mat_props(df, tab_props)
+
         return df
 
 
@@ -254,31 +241,26 @@ def convert_to_object(props, class_name, byte_order, raw_data=False):
         return result
 
     if class_name == "datetime":
-        obj = MatTime.toDatetime(props)
+        result = MatTime.toDatetime(props)
 
     elif class_name == "duration":
-        obj = MatTime.toDuration(props)
+        result = MatTime.toDuration(props)
 
     elif class_name == "string":
-        obj = MatString.toString(props, byte_order)
-        return obj
+        result = MatString.toString(props, byte_order)
 
     elif class_name == "table":
-        obj = MatTables.toDataFrame(props)
-        return obj
+        result = MatTables.toDataFrame(props)
 
-    # elif class_name == "timetable":
-    #     if "any" in props.dtype.names:
-    #         obj = MatTimetable(props[0, 0], defaults)
+    elif class_name == "timetable":
+        return props
 
     else:
-        obj = props
         # For all other classes, return raw data
-
-    result = {
-        "_Class": class_name,
-        "_Props": obj,
-    }
+        result = {
+            "_Class": class_name,
+            "_Props": props,
+        }
 
     return result
 

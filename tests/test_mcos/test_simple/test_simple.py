@@ -55,11 +55,9 @@ def test_parse_string_in_cell(expected_array, file_name, var_name):
     [
         (
             np.array(
-                [
-                    np.array(["String in Struct"]).reshape(1, 1),
-                ],
+                [[(np.array(["String in Struct"]).reshape(1, 1),)]],
                 dtype=[("MyField", "O")],
-            ).reshape(1, 1),
+            ),
             "var_struct.mat",
             "var_struct",
         )
@@ -69,7 +67,8 @@ def test_parse_string_in_cell(expected_array, file_name, var_name):
 def test_parse_string_in_struct(expected_array, file_name, var_name):
     file_path = os.path.join(os.path.dirname(__file__), file_name)
     matdict = load_from_mat(file_path, raw_data=False)
-
+    print(matdict[var_name])
+    print(expected_array)
     # Output format
     assert var_name in matdict
     assert isinstance(matdict[var_name], np.ndarray)
