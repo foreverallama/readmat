@@ -249,14 +249,7 @@ def test_load_nested_user_defined(expected_array, file_name, var_name):
                 "_Class": "DefaultClass2",
                 "_Props": np.array(
                     {
-                        "a": {
-                            "_Class": "string",
-                            "_Props": np.array(
-                                {
-                                    "any": np.array(["Default String"]).reshape(1, 1),
-                                }
-                            ).reshape(1, 1),
-                        },
+                        "a": np.array(["Default String"]).reshape(1, 1),
                         "b": np.array([10]).reshape(1, 1),
                         "c": np.array([30]).reshape(1, 1),
                     }

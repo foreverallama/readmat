@@ -2,7 +2,7 @@ import warnings
 
 import numpy as np
 
-from .class_parser import convert_to_object, wrap_enumeration_instance
+from matio.convert import convert_to_object, wrap_enumeration_instance
 
 
 class SubsystemReader:
@@ -320,17 +320,14 @@ class SubsystemReader:
             class_name = f"{handle_name}.{class_name}"
 
         # Converts some common MATLAB objects to Python objects
-        if not self.raw_data:
-            obj_props = convert_to_object(obj_props, class_name, self.byte_order)
+        result = convert_to_object(
+            obj_props, class_name, self.byte_order, self.raw_data
+        )
 
         # Remaining unknown class properties
         _u1 = self.fwrap_defaults[0][class_id, 0]
         _u2 = self.fwrap_defaults[1][class_id, 0]
 
-        result = {
-            "_Class": class_name,
-            "_Props": obj_props,
-        }
         return result
 
     def read_mcos_enumeration(self, metadata):

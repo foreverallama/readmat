@@ -5,7 +5,7 @@ from scipy.io import loadmat
 from scipy.io.matlab._mio5 import MatFile5Reader
 from scipy.io.matlab._mio5_params import OPAQUE_DTYPE
 
-from .subsystem import SubsystemReader
+from matio.subsystem import SubsystemReader
 
 
 def get_matfile_version(ssStream):
