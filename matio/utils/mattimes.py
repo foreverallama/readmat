@@ -60,14 +60,17 @@ def toDuration(props):
         count = millis / 1000  # Seconds
         dur = count.astype("timedelta64[s]")
     elif fmt == "m":
-        count = millis / 60000  # Minutes
+        count = millis / (1000 * 60)  # Minutes
         dur = count.astype("timedelta64[m]")
     elif fmt == "h":
-        count = millis / 3600000  # Hours
+        count = millis / (1000 * 60 * 60)  # Hours
         dur = count.astype("timedelta64[h]")
     elif fmt == "d":
-        count = millis / 86400000  # Days
+        count = millis / (1000 * 60 * 60 * 24)  # Days
         dur = count.astype("timedelta64[D]")
+    elif fmt == "y":
+        count = millis / (1000 * 60 * 60 * 24 * 365)  # Years
+        dur = count.astype("timedelta64[Y]")
     else:
         count = millis
         dur = count.astype("timedelta64[ms]")

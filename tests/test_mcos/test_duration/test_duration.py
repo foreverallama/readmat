@@ -30,6 +30,11 @@ from matio import load_from_mat
             "dur4",
         ),
         (
+            np.array([1, 2, 3], dtype="timedelta64[Y]").reshape(1, 3),
+            "dur_y.mat",
+            "dur8",
+        ),
+        (
             (np.timedelta64(1, "h") + np.timedelta64(2, "m") + np.timedelta64(3, "s"))
             .astype("timedelta64[ms]")
             .reshape(1, 1),
@@ -52,6 +57,7 @@ from matio import load_from_mat
         "duration-minutes",
         "duration-hours",
         "duration-days",
+        "duration-years",
         "duration-base",
         "duration-array",
         "duration-empty",

@@ -37,3 +37,8 @@ T9.Properties.VariableUnits = {'', 'category'};
 T9.Properties.VariableDescriptions = {'ID number', 'Category label'};
 T9.Properties.VariableContinuity = {'continuous', 'step'};
 save('T9.mat', 'T9', '-v7');
+
+time = datetime(2023,1,1) + days(0:2);
+data = [1,4;2,5;3,6];
+T10 = table(time', data);
+save('T10.mat', 'T10', '-v7');

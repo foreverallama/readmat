@@ -85,6 +85,24 @@ from matio import load_from_mat
             "T8.mat",
             "T8",
         ),
+        (
+            pd.DataFrame(
+                {
+                    "Var1": np.array(
+                        [
+                            "2023-01-01T00:00:00.000",
+                            "2023-01-02T00:00:00.000",
+                            "2023-01-03T00:00:00.000",
+                        ],
+                        dtype="datetime64[ms]",
+                    ),
+                    "data_1": np.array([1.0, 2.0, 3.0]),
+                    "data_2": np.array([4.0, 5.0, 6.0]),
+                }
+            ),
+            "T10.mat",
+            "T10",
+        ),
     ],
     ids=[
         "simple-table",
@@ -94,14 +112,12 @@ from matio import load_from_mat
         "table-with-nan",
         "table-with-row-names",
         "table-with-row-names",
+        "table-with-multicolumn-var",
     ],
 )
 def test_parse_table(expected_df, file_name, var_name):
     file_path = os.path.join(os.path.dirname(__file__), file_name)
     matdict = load_from_mat(file_path, raw_data=False)
-
-    print(matdict[var_name])
-    print(expected_df)
 
     assert var_name in matdict
     pd.testing.assert_frame_equal(matdict[var_name], expected_df)
@@ -185,8 +201,6 @@ def test_parse_table_with_attrs(expected_df, file_name, var_name):
     # Check attributes
     for key, value in expected_df.attrs.items():
         assert key in matdict[var_name].attrs
-        print(value)
-        print(matdict[var_name].attrs[key])
         if isinstance(value, np.ndarray):
             np.testing.assert_array_equal(matdict[var_name].attrs[key], value)
         else:
