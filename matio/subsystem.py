@@ -2,7 +2,7 @@ import warnings
 
 import numpy as np
 
-from .class_parser import convert_to_object, wrap_enumeration_instance
+from matio.convert import convert_to_object, wrap_enumeration_instance
 
 
 class SubsystemReader:

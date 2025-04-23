@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mat-io"
 dynamic = ["version"]
-description = "A package for reading MATLAB .mat files, with support for MATLAB and datatypes like table and string"
+description = "A package for reading MATLAB .mat files, with support for MATLAB datatypes like table and string"
 keywords = ["MATLAB", "mat", "io"]
 license = {file = "LICENSE"}
 authors = [{name = "foreverallama", email = "klockatoo@gmail.com"}]
