@@ -1,29 +1,27 @@
 [build-system]
-requires = ["setuptools>=64", "wheel", "setuptools-scm>=8"]
+requires = ["setuptools>=64", "setuptools-scm>=8", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "mat-io"
 dynamic = ["version"]
+authors = [
+    {name = "foreverallama", email = "klockatoo@gmail.com"},
+]
 description = "A package for reading MATLAB .mat files, with support for MATLAB datatypes like table and string"
-keywords = ["MATLAB", "mat", "io"]
-license = {file = "LICENSE"}
-authors = [{name = "foreverallama", email = "klockatoo@gmail.com"}]
 readme = "README.md"
 requires-python = ">=3.9"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+keywords = ["MATLAB", "mat", "io"]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering",
+]
 dependencies = [
     "scipy>=1.15.0",
     "numpy>=2.2.2",
-    "pytz",
     "pandas>=2.2.0",
-]
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: BSD License",
-    "Operating System :: OS Independent",
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "Topic :: Scientific/Engineering",
 ]
 
 [project.urls]
@@ -33,3 +31,5 @@ Issues = "https://github.com/foreverallama/matio"
 
 [tool.setuptools.packages]
 find = {}
+
+[tool.setuptools_scm]
