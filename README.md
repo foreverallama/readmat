@@ -1,42 +1,45 @@
 # Mat-IO Module
 
-The `mat-io` module provides tools for reading `.mat` files, particularly for extracting contents from user-defined objects or MATLAB datatypes such as `datetime`, `table` and `string`. It uses a wrapper built around `scipy.io` to extract raw subsystem data from MAT-files, which is then parsed and interpreted to extract object data. It includes utilities for reading MATLAB objects like `datetime` and `duration` both as raw data or their respective Python objects.
+The `mat-io` module provides tools for reading `.mat` files, particularly for extracting contents from user-defined objects or MATLAB datatypes such as `datetime`, `table` and `string`. It uses a wrapper built around `scipy.io` to extract raw subsystem data from MAT-files, which is then parsed and interpreted to extract object data. Currently supported MATLAB objects are:
 
- Currently supported MATLAB objects are:
-
-- `string`
-- `datetime`
-- `duration`
-- `Enumeration Instance Arrays`
-- `table`
-- `timetable`
+- string
+- datetime
+- duration
+- table
+- timetable
+- Enumeration Instance Arrays
 - User-defined objects
-
-Currently `mat-io` only supports be reading MAT-files. Support for writing to MAT-files is planned.
 
 **Note**: `load_from_mat()` uses a modified fork of `scipy`. The fork currently contains a few minor changes to `scipy.io` to return variable names and object metadata for all objects in a MAT-file. This change is available [on Github](https://github.com/foreverallama/scipy/tree/readmat-scipy) and can be installed directly from the branch. You can also view the changes under `patches/scipy_changes.patch` and apply it manually. Note that you might need to rebuild as parts of the Cython code was modified. Follow the instruction on the [official SciPy documentation](https://scipy.github.io/devdocs/building/index.html#building-from-source).
 
 ## Usage
 
-Clone and install using pip:
+Install using pip
 
 ```bash
-git clone https://github.com/foreverallama/matio.git
-pip install .
-# OR
-pip install git+https://github.com/foreverallama/matio.git
+pip install mat-io
 ```
 
-### `matio.load_from_mat(file_path, raw_data=False, mdict=None, *, spmatrix=True, **kwargs)`
+### Example
 
-#### Parameters:
+To read subsystem data from a `.mat` file:
+
+```python
+from matio import load_from_mat
+
+file_path = "path/to/your/file.mat"
+data = load_from_mat(file_path, raw_data=False)
+print(data)
+```
+
+#### Parameters
 
 - **`file_path`**: `str`
   Full path to the MAT-file.
 
 - **`raw_data`**: `bool`, *optional*
-  If `False`, returns object data as raw MATLAB structures.
-  If `True`, converts data into corresponding Python objects (e.g., `string`, `datetime`).
+  - If `False` (default), returns object data as raw object data
+  - If `True`, converts data into respective Pythonic datatypes (e.g., `string`, `datetime` and `table`).
 
 - **`mdict`**: `dict`, *optional*
   Dictionary into which MATLAB variables will be inserted. If `None`, a new dictionary is created and returned.
@@ -55,48 +58,14 @@ pip install git+https://github.com/foreverallama/matio.git
   - `variable_names`
   - `uint16_codec`
 
-Currently, the following arguments are not supported:
-
-- `appendmat`
-- `squeeze_me`
-- `struct_as_record`
-- `simplify_cells`
-
-### Example
-
-To read subsystem data from a `.mat` file:
-
-```python
-from matio import load_from_mat
-
-file_path = "path/to/your/file.mat"
-data = load_from_mat(file_path)
-print(data)
-```
-
 ### MATLAB objects
-
-MATLAB objects like `datetime` and `duration` are implemented using wrapper objects based on Python's `datetime`. `string` is returned as `numpy.array`. Both the processed data and raw data can be accessed and viewed.
-
-```python
-data_dict = load_from_mat(file_path)
-datetime_value = data["myVarName"]["__properties__"][0, 0]
-
-dt = datetime_value[0]  # Returns a datetime object
-print(datetime_value)  # Prints datetime in readable format
-```
 
 MATLAB objects are returned as a dictionary with the following fields:
 
-- `__class__`: The class name.
-- `__properties__`: A structured `numpy.ndarray` containing the property names and their contents. Dimensions are determined by the object dimensions.
-- `__default_properties__`: A structured `numpy.ndarray` containing the default values of the properties of the class (if any).
-- `__s3__`: The purpose of this data is unknown, but is contained within the subsystem.
-- `__s2__`: The purpose of this data is unknown, but is contained within the subsystem.
+- `_Class`: The class name
+- `_Props`: A structured `numpy.ndarray` containing the property names and their contents. Dimensions are determined by the object dimensions.
 
-## Breakdown
-
-A more detailed explanation of the MAT-file structure can be found [here](./docs).
+If the `raw_data` parameter is set to `False`, then `load_from_mat` converts these objects into a corresponding Pythonic datatype. This conversion is [detailed here](https://github.com/foreverallama/matio/tree/main/docs).
 
 ## Contribution
 
@@ -108,8 +77,8 @@ There's still lots to do! I could use your help in the following:
 - Algorithmic optimization to integrate within the `scipy.io` framework
 - Documentation of the MAT-file format
 
-Feel free to create a PR if you'd like to add something, or open up an issue if you'd like to discuss! I've also opened an [issue](https://github.com/scipy/scipy/issues/22736) with `scipy.io` detailing some of the workflow, as well as a [PR](https://github.com/scipy/scipy/pull/22762) to develop this iteratively. Please feel free to contribute there as well!
+Feel free to create a PR if you'd like to add something, or open up an issue if you'd like to discuss! I've also opened an [issue](https://github.com/scipy/scipy/issues/22736) with `scipy.io` detailing some of the workflow, as well as a [PR](https://github.com/scipy/scipy/pull/22847) to develop this iteratively. Please feel free to contribute there as well!
 
 ## Acknowledgement
 
-Big thanks to [mahalex](https://github.com/mahalex/MatFileHandler) for their detailed breakdown of MAT-files. Most of this wouldn't be possible without it.
+Big thanks to [mahalex](https://github.com/mahalex/MatFileHandler) for their detailed breakdown of MAT-files. A lot of this wouldn't be possible without it.

@@ -26,12 +26,16 @@ Objects of this class contain the following properties:
 - `tmz` or Timezone: A UTF-8 string
 - `fmt` or Format: The display format to use. e.g. `YYYY-MM-DD HH:MM:SS`
 
+`matio.load_from_mat` converts these objects into `numpy.datetime64[ms]` arrays if `raw_data` is set to `False`. Timezone offsets, if present, is automatically applied using `zoneinfo`.
+
 ## `duration`
 
 Objects of this class contain the following properties:
 
 - `millis`: A real double precision number containing time in milliseconds
 - `fmt` or Format: The display format to use. e.g. `s`, `m`, `h`, `d` for `seconds`, `minutes`, `hours`, `days`
+
+`matio.load_from_mat` converts these objects into `numpy.timedelta64` arrays if `raw_data` is set to `False`. The `dtype` of the array is set according to `fmt`. It defaults to `[ms]` if `fmt` is not supported.
 
 ## `string`
 
@@ -42,6 +46,8 @@ Objects of this class contains only one property called `any`. The contents of t
 - The next `ndims` integers specify the size of each dimension
 - The next `K` integers specify the number of characters in each string in the array. Here `K` is the total number of strings in the array (which is the product of all the dimensions)
 - The remaining bytes store the string contents. However, these remaining bytes are to be read as `UTF-16` characters
+
+`matio.load_from_mat` converts these objects into `numpy.str_` arrays.
 
 ## `table`
 
@@ -70,6 +76,8 @@ Objects of this class contain the following properties:
    14. `VariableDescriptions`
    15. `VariableUnits`
    16. `VariableContinuity`
+
+`matio.load_from_mat` converts these objects into `pandas.DataFrame` objects.
 
 ## `timetable`
 
@@ -103,6 +111,8 @@ The remaining fields are metadata fields:
 11. `timeEvents`
 12. `varContinuity`
 
+`matio.load_from_mat` converts these objects into `pandas.DataFrame` objects.
+
 ## What if the field contains an object?
 
 If the field contains an object, then the corresponding cell would contain a `uint32` column matrix structured exactly the same as the object metadata subelement of `mxOPAQUE_CLASS` in the normal part of the MAT-file. This metadata contains the `classID` and `objectID` of the object stored in its field. But how do you differentiate this from a regular `uint32` column matrix?
@@ -127,6 +137,17 @@ Enumeration instance arrays are stored as `mxOPAQUE_CLASS` arrays of `MCOS` type
 4. `Values`: Contains an array of object references, which are used to extract the contents of each instance of the enumeration array from subsytem. If the properties of the enumeration class are not initialized/instantiated, then this is an empty array.
 5. `ValueIndices`: The value indices of the enumeration array. This also indicates the dimensions of the enumeration array.
 6. `BuiltinClassName`: This is set if the enumeration class specifies a superclass. The value is a metadata indicator to extract the name of the superclass.
+
+Enumerations arrays are returned as dictionaries as follows:
+```python
+{
+    "_Tag": "EnumerationInstance",
+    "_ClassName": "ClassName",
+    "_BuiltinClassName": "BuiltinClassName",  # if exists else None
+    "_ValueNames": np.array([Name1, Name2]),
+    "_Values": np.array([]),
+}
+```
 
 ## Handle Classes
 
