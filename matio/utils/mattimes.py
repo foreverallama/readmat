@@ -30,6 +30,11 @@ def get_tz_offset(tz):
 def toDatetime(props):
     """Convert MATLAB datetime to Python datetime
     Datetime returned as numpy.datetime64[ms]
+
+    MATLAB datetimes objects are stored with the following properties:
+    1. data - complex number = real_part (ms) + i * imag_part (us)
+    2. fmt - Format | char array
+    3. tz - Timezone | char array
     """
 
     data = props[0, 0].get("data", np.array([]))
@@ -49,6 +54,10 @@ def toDatetime(props):
 def toDuration(props):
     """Convert MATLAB duration to Python timedelta
     Duration returned as numpy.timedelta64
+
+    MATLAB datetimes objects are stored with the following properties:
+    1. millis - double
+    2. fmt - char array
     """
 
     millis = props[0, 0]["millis"]

@@ -5,6 +5,8 @@ import numpy as np
 
 def toString(props, byte_order):
     """Parse string data from MATLAB file
+    String objects are stored as "any" properties in MAT-files.
+
     Strings are stored within a uint64 array with the following format:
         1. version
         2. ndims

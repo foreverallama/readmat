@@ -29,6 +29,9 @@ def add_table_props(df, tab_props):
 
 
 def add_timetable_props(df, tab_props):
+    """Add MATLAB table properties to pandas DataFrame
+    These properties are mostly cell arrays of character vectors
+    """
     df.attrs["varDescriptions"] = [
         s.item() if s.size > 0 else "" for s in tab_props["varDescriptions"].ravel()
     ]
@@ -49,6 +52,7 @@ def add_timetable_props(df, tab_props):
 
 
 def toDataFrame(data, nvars, varnames):
+    """Creates a dataframe from coldata and column names"""
     rows = {}
     for i in range(nvars):
         vname = varnames[0, i].item()
@@ -70,11 +74,13 @@ def toDataFrame(data, nvars, varnames):
 
 
 def mat_to_table(props, add_table_attrs=False):
+    """Converts MATLAB table to pandas DataFrame"""
     data = props[0, 0]["data"]
     nvars = int(props[0, 0]["nvars"].item())
     varnames = props[0, 0]["varnames"]
     df = toDataFrame(data, nvars, varnames)
 
+    # Add df.index
     nrows = int(props[0, 0]["nrows"].item())
     rownames = props[0, 0]["rownames"]
     if rownames.size > 0:
@@ -91,6 +97,14 @@ def mat_to_table(props, add_table_attrs=False):
 
 
 def get_row_times(rowTimes, numRows):
+    """Get row times from MATLAB timetable
+    rowTimes is a duration or datetime array if explicitly specified
+    If using "SampleRate" or "TimeStep", it is a struct array with the following fields:
+    1. origin - the start time as a duration or datetime scalar
+    2. specifiedAsRate - boolean indicating which to use - sampleRate or TimeStep
+    3. stepSize - the time step as a duration scalar
+    4. sampleRate - the sample rate as a float
+    """
     if not rowTimes.dtype.names:
         return rowTimes.ravel()
 
@@ -105,6 +119,7 @@ def get_row_times(rowTimes, numRows):
 
 
 def mat_to_timetable(props, add_table_attrs=False):
+    """Converts MATLAB timetable to pandas DataFrame"""
     numVars = int(props[0, 0]["any"][0, 0]["numVars"].item())
     varNames = props[0, 0]["any"][0, 0]["varNames"]
     data = props[0, 0]["any"][0, 0]["data"]
