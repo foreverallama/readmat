@@ -2,14 +2,7 @@ import numpy as np
 import pandas as pd
 
 
-def get_col_data(coldata):
-    if isinstance(coldata, np.ndarray):
-        # Unravel numpy arrays
-        return coldata.ravel()
-    return coldata
-
-
-def add_mat_props(df, tab_props):
+def add_table_props(df, tab_props):
     """Add MATLAB table properties to pandas DataFrame
     These properties are mostly cell arrays of character vectors
     """
@@ -35,19 +28,55 @@ def add_mat_props(df, tab_props):
     return df
 
 
-def toDataFrame(props, add_table_attrs=True):
-    data = props[0, 0]["data"]
-    nrows = int(props[0, 0]["nrows"].item())
-    nvars = int(props[0, 0]["nvars"].item())
-    varnames = props[0, 0]["varnames"]
-    rownames = props[0, 0]["rownames"]
+def add_timetable_props(df, tab_props):
+    df.attrs["varDescriptions"] = [
+        s.item() if s.size > 0 else "" for s in tab_props["varDescriptions"].ravel()
+    ]
+    df.attrs["varUnits"] = [
+        s.item() if s.size > 0 else "" for s in tab_props["varUnits"].ravel()
+    ]
+    df.attrs["varContinuity"] = [
+        s.item() if s.size > 0 else "" for s in tab_props["varContinuity"].ravel()
+    ]
+    df.attrs["UserData"] = tab_props["arrayProps"]["UserData"][0, 0]
+    df.attrs["Description"] = (
+        tab_props["arrayProps"]["Description"][0, 0].item()
+        if tab_props["arrayProps"]["Description"][0, 0].size > 0
+        else ""
+    )
+
+    return df
+
+
+def toDataFrame(data, nvars, varnames):
     rows = {}
     for i in range(nvars):
+        vname = varnames[0, i].item()
         coldata = data[0, i]
-        coldata = get_col_data(coldata)
-        rows[varnames[0, i].item()] = coldata
+
+        # If variable is multicolumn data
+        if isinstance(coldata, np.ndarray):
+            if coldata.shape[1] == 1:
+                rows[vname] = coldata[:, 0]
+            else:
+                for j in range(coldata.shape[1]):
+                    colname = f"{vname}_{j + 1}"
+                    rows[colname] = coldata[:, j]
+        else:
+            rows[vname] = coldata
 
     df = pd.DataFrame(rows)
+    return df
+
+
+def mat_to_table(props, add_table_attrs=False):
+    data = props[0, 0]["data"]
+    nvars = int(props[0, 0]["nvars"].item())
+    varnames = props[0, 0]["varnames"]
+    df = toDataFrame(data, nvars, varnames)
+
+    nrows = int(props[0, 0]["nrows"].item())
+    rownames = props[0, 0]["rownames"]
     if rownames.size > 0:
         rownames = [s.item() for s in rownames.ravel()]
         if len(rownames) == nrows:
@@ -56,48 +85,40 @@ def toDataFrame(props, add_table_attrs=True):
     tab_props = props[0, 0]["props"][0, 0]
     if add_table_attrs:
         # Since pandas lists this as experimental, flag so we can switch off if it breaks
-        df = add_mat_props(df, tab_props)
+        df = add_table_props(df, tab_props)
 
     return df
 
 
-class MatTimetable:
-    # TODO: Collect cases and fix
-    def __init__(self, obj_dict):
-        self.any = obj_dict.get("any")[0, 0]
-        self.data = self.any["data"]
-        self.numDims = self.any["numDims"]
-        self.dimNames = self.any["dimNames"]
-        self.varNames = self.any["varNames"]
-        self.numRows = self.any["numRows"]
-        self.numVars = self.any["numVars"]
-        self.rowTimes = self.any["rowTimes"]
-        self.df = self._build_dataframe()
+def get_row_times(rowTimes, numRows):
+    if not rowTimes.dtype.names:
+        return rowTimes.ravel()
 
-    def __str__(self):
-        return str(self.df)
+    start = rowTimes[0, 0]["origin"]
+    if rowTimes[0, 0]["specifiedAsRate"]:
+        fs = rowTimes[0, 0]["sampleRate"].item()
+        step = np.timedelta64(int(1e9 / fs), "ns")
+    else:
+        step = rowTimes[0, 0]["stepSize"].astype("timedelta64[ns]")
 
-    def __repr__(self):
-        return repr(self.df)
+    return (start + step * np.arange(numRows)).ravel()
 
-    def _extract_cell_value(self, cell):
-        if isinstance(cell, np.ndarray) and cell.dtype == object:
-            return cell[0, 0]["__fields__"]
-        return cell
 
-    def _build_dataframe(self):
-        columns = {}
-        for i in range(int(self.numVars.item())):
-            varname = self._extract_cell_value(self.varNames[0, i]).item()
-            coldata = [
-                data.item() for data in self._extract_cell_value(self.data[0, i])
-            ]
-            columns[varname] = coldata
+def mat_to_timetable(props, add_table_attrs=False):
+    numVars = int(props[0, 0]["any"][0, 0]["numVars"].item())
+    varNames = props[0, 0]["any"][0, 0]["varNames"]
+    data = props[0, 0]["any"][0, 0]["data"]
+    df = toDataFrame(data, numVars, varNames)
 
-        df = pd.DataFrame(columns)
-        time_arr = self.rowTimes[0, 0]["__fields__"]
-        times = [time_arr[i].item() for i in range(int(self.numRows.item()))]
-        df.index = pd.to_datetime(times)
-        df.index.name = self._extract_cell_value(self.dimNames[0, 0]).item()
+    rowTimes = props[0, 0]["any"][0, 0]["rowTimes"]
+    numRows = int(props[0, 0]["any"][0, 0]["numRows"].item())
 
-        return df
+    rowTimes = get_row_times(rowTimes, numRows)
+    dimNames = props[0, 0]["any"][0, 0]["dimNames"]
+    df.index = pd.Index(rowTimes, name=dimNames[0, 0].item())
+
+    if add_table_attrs:
+        # Since pandas lists this as experimental, flag so we can switch off if it breaks
+        df = add_timetable_props(df, props[0, 0]["any"][0, 0])
+
+    return df

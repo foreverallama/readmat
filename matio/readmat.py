@@ -129,7 +129,15 @@ def find_opaque_dtype(arr, subsystem, path=()):
     return arr
 
 
-def load_from_mat(file_path, mdict=None, raw_data=False, *, spmatrix=True, **kwargs):
+def load_from_mat(
+    file_path,
+    mdict=None,
+    raw_data=False,
+    add_table_attrs=False,
+    *,
+    spmatrix=True,
+    **kwargs,
+):
     """Loads variables from MAT-file
     Calls scipy.io.loadmat to read the MAT-file and then processes the
     "__function_workspace__" variable to extract subsystem data.
@@ -137,8 +145,9 @@ def load_from_mat(file_path, mdict=None, raw_data=False, *, spmatrix=True, **kwa
         1. file_path (str): Path to MAT-file
         2. mdict (dict): Dictionary to store loaded variables
         3. raw_data (bool): Whether to return raw data for objects
-        4. spmatrix (bool): Additional arguments for scipy.io.loadmat
-        5. kwargs: Additional arguments for scipy.io.loadmat
+        4. add_table_attrs (bool): Add attributes to pandas DataFrame for MATLAB tables/timetables
+        5. spmatrix (bool): Additional arguments for scipy.io.loadmat
+        6. kwargs: Additional arguments for scipy.io.loadmat
     Returns:
         1. mdict (dict): Dictionary of loaded variables
     """
@@ -154,7 +163,7 @@ def load_from_mat(file_path, mdict=None, raw_data=False, *, spmatrix=True, **kwa
         return matfile_dict
 
     ss_array, byte_order = read_subsystem(ssdata, **kwargs)
-    subsystem = SubsystemReader(ss_array, byte_order, raw_data)
+    subsystem = SubsystemReader(ss_array, byte_order, raw_data, add_table_attrs)
 
     for var, data in matfile_dict.items():
         if not isinstance(data, np.ndarray):

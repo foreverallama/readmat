@@ -1,6 +1,6 @@
 import numpy as np
 
-from matio.utils import toDataFrame, toDatetime, toDuration, toString
+from matio.utils import mat_to_table, mat_to_timetable, toDatetime, toDuration, toString
 
 # TODO: Add support for following classes:
 # 1. dynamicprops
@@ -8,7 +8,9 @@ from matio.utils import toDataFrame, toDatetime, toDuration, toString
 # 3. event.proplistener
 
 
-def convert_to_object(props, class_name, byte_order, raw_data=False):
+def convert_to_object(
+    props, class_name, byte_order, raw_data=False, add_table_attrs=False
+):
     """Converts the object to a Python compatible object"""
 
     if raw_data:
@@ -28,10 +30,10 @@ def convert_to_object(props, class_name, byte_order, raw_data=False):
         result = toString(props, byte_order)
 
     elif class_name == "table":
-        result = toDataFrame(props)
+        result = mat_to_table(props, add_table_attrs)
 
     elif class_name == "timetable":
-        return props
+        result = mat_to_timetable(props, add_table_attrs)
 
     else:
         # For all other classes, return raw data

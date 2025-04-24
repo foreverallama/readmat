@@ -28,7 +28,7 @@ To read subsystem data from a `.mat` file:
 from matio import load_from_mat
 
 file_path = "path/to/your/file.mat"
-data = load_from_mat(file_path, raw_data=False)
+data = load_from_mat(file_path, raw_data=False, add_table_attrs=False)
 print(data)
 ```
 
@@ -40,6 +40,9 @@ print(data)
 - **`raw_data`**: `bool`, *optional*
   - If `False` (default), returns object data as raw object data
   - If `True`, converts data into respective Pythonic datatypes (e.g., `string`, `datetime` and `table`).
+
+- **`add_table_attrs`**: `bool`, *optional*
+  If `True`, additional properties of MATLAB `table` and `timetable` are attached to the resultant `pandas.DataFrame`. Works only if `raw_data = False`
 
 - **`mdict`**: `dict`, *optional*
   Dictionary into which MATLAB variables will be inserted. If `None`, a new dictionary is created and returned.

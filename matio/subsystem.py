@@ -10,10 +10,11 @@ class SubsystemReader:
     Currently only supports MCOS objects
     """
 
-    def __init__(self, ss_array, byte_order, raw_data=False):
+    def __init__(self, ss_array, byte_order, raw_data=False, add_table_attrs=False):
         self.ssdata = ss_array
         self.byte_order = "<u4" if byte_order == "<" else ">u4"
         self.raw_data = raw_data
+        self.add_table_attrs = add_table_attrs
         self.fwrap_metadata = None
         self.fwrap_fields = None
         self.fwrap_defaults = None
@@ -321,7 +322,7 @@ class SubsystemReader:
 
         # Converts some common MATLAB objects to Python objects
         result = convert_to_object(
-            obj_props, class_name, self.byte_order, self.raw_data
+            obj_props, class_name, self.byte_order, self.raw_data, self.add_table_attrs
         )
 
         # Remaining unknown class properties
