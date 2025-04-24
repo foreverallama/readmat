@@ -1,6 +1,7 @@
 import numpy as np
 
 from matio.utils import (
+    mat_to_calendarDuration,
     mat_to_categorical,
     mat_to_table,
     mat_to_timetable,
@@ -10,16 +11,6 @@ from matio.utils import (
     toMatDictionary,
     toString,
 )
-
-# TODO: Add support for following classes:
-# 1. dynamicprops
-# 2. function_handle
-# 3. event.proplistener
-# 4. Function Handles
-# 5. calendarDuration
-# 6. timeseries
-# 7. Java/.NET/COM objects
-# 8. Graphics Objects
 
 
 def convert_to_object(
@@ -45,6 +36,7 @@ def convert_to_object(
         },
         "categorical": lambda: mat_to_categorical(props),
         "dictionary": lambda: toMatDictionary(props),
+        "calendarDuration": lambda: mat_to_calendarDuration(props),
     }
 
     result = class_to_function.get(

@@ -8,6 +8,7 @@ Field contents of object arrays of MATLAB datatypes like `string` or `datetime` 
 
 - [`datetime`](#datetime)
 - [`duration`](#duration)
+- [`calendarDuration`](#calendarduration)
 - [`string`](#string)
 - [`table`](#table)
 - [`timetable`](#timetable)
@@ -17,7 +18,7 @@ Field contents of object arrays of MATLAB datatypes like `string` or `datetime` 
 - [What if the field contains an object?](#what-if-the-field-contains-an-object)
 - [The `any` Property](#the-any-property)
 - [Enumeration Instance Arrays](#enumeration-instance-arrays)
-- [Handle Classes](#handle-classes)
+- [Others](#others)
 
 <!--TOC-->
 
@@ -39,6 +40,17 @@ Objects of this class contain the following properties:
 - `fmt` or Format: The display format to use. e.g. `s`, `m`, `h`, `d` for `seconds`, `minutes`, `hours`, `days`
 
 `matio.load_from_mat` converts these objects into `numpy.timedelta64` arrays if `raw_data` is set to `False`. The `dtype` of the array is set according to `fmt`. It defaults to `[ms]` if `fmt` is not supported.
+
+## `calendarDuration`
+
+Objects of this class contains a single property `components` which is defined as a `struct` array with the following fields:
+
+1. `months`
+2. `days`
+3. `millis`
+4. `fmt`: Character Array
+
+`matio.load_from_mat` converts this into a structured `numpy.ndarray` with a single field `calendarDuration`, which contains the above properties as `numpy.timedelta64`
 
 ## `string`
 
@@ -175,6 +187,7 @@ Enumeration instance arrays are stored as `mxOPAQUE_CLASS` arrays of `MCOS` type
 6. `BuiltinClassName`: This is set if the enumeration class specifies a superclass. The value is a metadata indicator to extract the name of the superclass.
 
 Enumerations arrays are returned as dictionaries as follows:
+
 ```python
 {
     "_Tag": "EnumerationInstance",
@@ -185,9 +198,13 @@ Enumerations arrays are returned as dictionaries as follows:
 }
 ```
 
-## Handle Classes
+## Others
 
 To add:
 
-1. `dynamicprops`
-2. `proplistener`
+1. `function_handle`
+2. `timeseries`
+3. `dynamicprops`
+4. `proplistener`
+5. Graphics Objects
+6. Java/.NET/COM objects

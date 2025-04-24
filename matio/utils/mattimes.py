@@ -86,3 +86,22 @@ def toDuration(props):
         # Default case
 
     return dur
+
+
+def mat_to_calendarDuration(props):
+    """Convert MATLAB calendarDuration to Python timedelta
+    CalendarDuration returned as numpy.timedelta64
+
+    MATLAB calendarDuration objects are stored with the following properties:
+    1. months - double
+    2. days - double
+    3. millis - double
+    """
+
+    months = props[0, 0]["components"][0, 0]["months"].astype("timedelta64[M]")
+    days = props[0, 0]["components"][0, 0]["days"].astype("timedelta64[D]")
+    millis = props[0, 0]["components"][0, 0]["millis"].astype("timedelta64[ms]")
+
+    cal = np.empty((1, 1), dtype=[("calendarDuration", object)])
+    cal[0, 0]["calendarDuration"] = (months, days, millis)
+    return cal

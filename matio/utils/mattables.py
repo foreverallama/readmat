@@ -129,7 +129,15 @@ def get_row_times(rowTimes, numRows):
         fs = rowTimes[0, 0]["sampleRate"].item()
         step = np.timedelta64(int(1e9 / fs), "ns")
     else:
-        step = rowTimes[0, 0]["stepSize"].astype("timedelta64[ns]")
+        step = rowTimes[0, 0]["stepSize"]
+        if step.dtype.names is not None and "calendarDuration" in step.dtype.names:
+            comps = step[0, 0]["calendarDuration"]
+            step = comps[0] or comps[1] or comps[2]
+            # Only one of months, days, or millis is non-zero
+            step_unit = np.datetime_data(step.dtype)[0]
+            start = start.astype(f"datetime64[{step_unit}]")
+        else:
+            step = step.astype("timedelta64[ns]")
 
     return (start + step * np.arange(numRows)).ravel()
 

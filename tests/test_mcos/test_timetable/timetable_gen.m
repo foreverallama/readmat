@@ -28,6 +28,11 @@ tt9.Properties.VariableDescriptions = {'myVar'};
 tt9.Properties.VariableUnits = {'m/s'};
 tt9.Properties.VariableContinuity = {'continuous'};
 
+%% Timetable with Calendar Step
+
+calm = calmonths(3);
+tt10 = timetable(data1, 'TimeStep', calm, 'StartTime', datetime(2020,1,1));
+
 %% TO ADD
 % Events
 % Custom Props
@@ -43,3 +48,4 @@ save('tt6.mat','tt6');
 save('tt7.mat','tt7');
 save('tt8.mat','tt8');
 save('tt9.mat','tt9');
+save('tt10.mat', 'tt10');
