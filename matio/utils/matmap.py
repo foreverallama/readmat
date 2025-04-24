@@ -1,3 +1,6 @@
+import warnings
+
+
 def toContainerMap(props):
     """Converts the properties of a container map to a dictionary
     MATLAB container.map:
@@ -15,3 +18,24 @@ def toContainerMap(props):
         result[key] = val
 
     return result
+
+
+def toMatDictionary(props):
+    """Converts the properties of a MATLAB dictionary to a dictionary
+    MATLAB dictionary:
+    - Property: data
+        - Value: struct array
+            - Fields: Version, IsKeyCombined, IsValueCombined, Key, Value
+
+    Wrapped as tuple of (key, value) since keys can be of any type
+    """
+    ver = int(props[0, 0]["data"][0, 0]["Version"].item())
+    if ver != 1:
+        warnings.warn(
+            "Only v1 MATLAB dictionaries are supported. Got v{}".format(ver),
+            UserWarning,
+        )
+
+    ks = props[0, 0]["data"][0, 0]["Key"].ravel()
+    vals = props[0, 0]["data"][0, 0]["Value"].ravel()
+    return list(zip(ks, vals))

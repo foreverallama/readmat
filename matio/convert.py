@@ -7,6 +7,7 @@ from matio.utils import (
     toContainerMap,
     toDatetime,
     toDuration,
+    toMatDictionary,
     toString,
 )
 
@@ -14,6 +15,11 @@ from matio.utils import (
 # 1. dynamicprops
 # 2. function_handle
 # 3. event.proplistener
+# 4. Function Handles
+# 5. calendarDuration
+# 6. timeseries
+# 7. Java/.NET/COM objects
+# 8. Graphics Objects
 
 
 def convert_to_object(
@@ -38,6 +44,7 @@ def convert_to_object(
             "_Props": toContainerMap(props),
         },
         "categorical": lambda: mat_to_categorical(props),
+        "dictionary": lambda: toMatDictionary(props),
     }
 
     result = class_to_function.get(

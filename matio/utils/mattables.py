@@ -1,5 +1,12 @@
+import warnings
+
 import numpy as np
 import pandas as pd
+
+MAX_TABLE_VERSION = 4
+MIN_TABLE_VERSION = 1
+MAX_TIMETABLE_VERSION = 6
+MIN_TIMETABLE_VERSION = 2
 
 
 def add_table_props(df, tab_props):
@@ -75,6 +82,15 @@ def toDataFrame(data, nvars, varnames):
 
 def mat_to_table(props, add_table_attrs=False):
     """Converts MATLAB table to pandas DataFrame"""
+
+    ver = int(props[0, 0]["props"][0, 0]["versionSavedFrom"].item())
+    if not MIN_TABLE_VERSION <= ver <= MAX_TABLE_VERSION:
+        warnings.warn(
+            f"MATLAB table version {ver} is not supported. "
+            f"Minimum supported version is {MIN_TABLE_VERSION}.",
+            UserWarning,
+        )
+
     data = props[0, 0]["data"]
     nvars = int(props[0, 0]["nvars"].item())
     varnames = props[0, 0]["varnames"]
@@ -120,6 +136,15 @@ def get_row_times(rowTimes, numRows):
 
 def mat_to_timetable(props, add_table_attrs=False):
     """Converts MATLAB timetable to pandas DataFrame"""
+
+    ver = int(props[0, 0]["any"][0, 0]["versionSavedFrom"].item())
+    if not MIN_TIMETABLE_VERSION <= ver <= MAX_TIMETABLE_VERSION:
+        warnings.warn(
+            f"MATLAB timetable version {ver} is not supported. "
+            f"Minimum supported version is {MIN_TIMETABLE_VERSION}.",
+            UserWarning,
+        )
+
     numVars = int(props[0, 0]["any"][0, 0]["numVars"].item())
     varNames = props[0, 0]["any"][0, 0]["varNames"]
     data = props[0, 0]["any"][0, 0]["data"]

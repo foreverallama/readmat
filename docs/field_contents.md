@@ -12,6 +12,7 @@ Field contents of object arrays of MATLAB datatypes like `string` or `datetime` 
 - [`table`](#table)
 - [`timetable`](#timetable)
 - [`containers.Map`](#containersmap)
+- [`dictionary`](#dictionary)
 - [`categorical`](#categorical)
 - [What if the field contains an object?](#what-if-the-field-contains-an-object)
 - [The `any` Property](#the-any-property)
@@ -124,6 +125,18 @@ Objects of this class contains a single property `serialization`, which is defin
 3. `uniformity`: bool, indicating uniform values
 4. `keyType`: Char array indicating `dtype` of keys
 5. `valueType`: Char array indicating `dtype` of values
+
+## `dictionary`
+
+Objects of this class contain a single property `data` which is defined as a `struct` array with the following fields:
+
+1. `Version`
+2. `IsKeyCombined`: bool, unknown indicator, presumably for optimization purposes
+3. `IsValueCombined`: bool, unknown indicator, presumably for optimization purposes
+4. `Key`
+5. `Value`
+
+Since keys can be of any MATLAB datatype, including object instances, `matio.load_from_mat` converts this into a list of tuple `(key, value)` pairs
 
 ## `categorical`
 
