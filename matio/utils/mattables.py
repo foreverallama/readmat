@@ -137,3 +137,21 @@ def mat_to_timetable(props, add_table_attrs=False):
         df = add_timetable_props(df, props[0, 0]["any"][0, 0])
 
     return df
+
+
+def mat_to_categorical(props):
+    """Converts MATLAB categorical to pandas Categorical
+    MATLAB categorical objects are stored with the following properties:
+    1. categoryNames - all unique categories
+    2. codes
+    3. isOrdinal - boolean indicating if the categorical is ordered
+    4. isProtected - boolean indicating if the categorical is protected
+    """
+
+    raw_names = props[0, 0]["categoryNames"]
+    category_names = [name.item() for name in raw_names.ravel()]
+
+    # MATLAB codes are 1-indexed as uint integers
+    codes = props[0, 0]["codes"].astype(int) - 1
+    ordered = bool(props[0, 0]["isOrdinal"].item())
+    return pd.Categorical.from_codes(codes, categories=category_names, ordered=ordered)
