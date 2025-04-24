@@ -1,6 +1,7 @@
 import numpy as np
 
 from matio.utils import (
+    mat_to_categorical,
     mat_to_table,
     mat_to_timetable,
     toContainerMap,
@@ -21,37 +22,28 @@ def convert_to_object(
     """Converts the object to a Python compatible object"""
 
     if raw_data:
-        result = {
+        return {
             "_Class": class_name,
             "_Props": props,
         }
-        return result
 
-    if class_name == "datetime":
-        result = toDatetime(props)
-
-    elif class_name == "duration":
-        result = toDuration(props)
-
-    elif class_name == "string":
-        result = toString(props, byte_order)
-
-    elif class_name == "table":
-        result = mat_to_table(props, add_table_attrs)
-
-    elif class_name == "timetable":
-        result = mat_to_timetable(props, add_table_attrs)
-
-    elif class_name == "containers.Map":
-        result = {"_Class": class_name, "_Props": toContainerMap(props)}
-        # Wrapping as container.map is also a dict
-
-    else:
-        # For all other classes, return raw data
-        result = {
+    class_to_function = {
+        "datetime": lambda: toDatetime(props),
+        "duration": lambda: toDuration(props),
+        "string": lambda: toString(props, byte_order),
+        "table": lambda: mat_to_table(props, add_table_attrs),
+        "timetable": lambda: mat_to_timetable(props, add_table_attrs),
+        "containers.Map": lambda: {
             "_Class": class_name,
-            "_Props": props,
-        }
+            "_Props": toContainerMap(props),
+        },
+        "categorical": lambda: mat_to_categorical(props),
+    }
+
+    result = class_to_function.get(
+        class_name,
+        lambda: {"_Class": class_name, "_Props": props},  # Default case
+    )()
 
     return result
 

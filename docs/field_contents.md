@@ -11,6 +11,8 @@ Field contents of object arrays of MATLAB datatypes like `string` or `datetime` 
 - [`string`](#string)
 - [`table`](#table)
 - [`timetable`](#timetable)
+- [`containers.Map`](#containersmap)
+- [`categorical`](#categorical)
 - [What if the field contains an object?](#what-if-the-field-contains-an-object)
 - [The `any` Property](#the-any-property)
 - [Enumeration Instance Arrays](#enumeration-instance-arrays)
@@ -112,6 +114,27 @@ The remaining fields are metadata fields:
 12. `varContinuity`
 
 `matio.load_from_mat` converts these objects into `pandas.DataFrame` objects.
+
+## `containers.Map`
+
+Objects of this class contains a single property `serialization`, which is defined as a `struct` array with the following fields:
+
+1. `keys`: A cell array containing the key names
+2. `values`: A cell array containing the values
+3. `uniformity`: bool, indicating uniform values
+4. `keyType`: Char array indicating `dtype` of keys
+5. `valueType`: Char array indicating `dtype` of values
+
+## `categorical`
+
+Objects of this class contain the following properties:
+
+1. `categoryNames`: A cell array of character arrays or strings
+2. `codes`: An unsigned integer array specifying the category codes
+3. `isProtected`: bool, indicates protected categories
+4. `isOrdinal`: bool, indicates ordered variables
+
+`matio.load_from_mat` converts these objects into `pandas.Categorical` objects.
 
 ## What if the field contains an object?
 

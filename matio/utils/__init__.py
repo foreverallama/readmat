@@ -1,7 +1,7 @@
 # matio/utils/__init__.py
 from .matmap import toContainerMap
 from .matstring import toString
-from .mattables import mat_to_table, mat_to_timetable
+from .mattables import mat_to_categorical, mat_to_table, mat_to_timetable
 from .mattimes import toDatetime, toDuration
 
 __all__ = [
@@ -11,4 +11,5 @@ __all__ = [
     "toString",
     "mat_to_timetable",
     "toContainerMap",
+    "mat_to_categorical",
 ]

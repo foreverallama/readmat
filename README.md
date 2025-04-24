@@ -1,12 +1,12 @@
 # Mat-IO Module
 
-The `mat-io` module provides tools for reading `.mat` files, particularly for extracting contents from user-defined objects or MATLAB datatypes such as `datetime`, `table` and `string`. It uses a wrapper built around `scipy.io` to extract raw subsystem data from MAT-files, which is then parsed and interpreted to extract object data. Currently supported MATLAB objects are:
+The `mat-io` module provides tools for reading `.mat` files, particularly for extracting contents from user-defined objects or MATLAB datatypes such as `datetime`, `table` and `string`. It uses a wrapper built around `scipy.io` to extract raw subsystem data from MAT-files, which is then parsed and interpreted to extract object data. Currently supported MATLAB object-like datatypes are:
 
-- string
-- datetime
-- duration
-- table
-- timetable
+- `string`
+- `datetime` and `duration`
+- `table` and `timetable`
+- `containers.Map`
+- `categorical`
 - Enumeration Instance Arrays
 - User-defined objects
 
