@@ -1,6 +1,13 @@
 import numpy as np
 
-from matio.utils import mat_to_table, mat_to_timetable, toDatetime, toDuration, toString
+from matio.utils import (
+    mat_to_table,
+    mat_to_timetable,
+    toContainerMap,
+    toDatetime,
+    toDuration,
+    toString,
+)
 
 # TODO: Add support for following classes:
 # 1. dynamicprops
@@ -34,6 +41,10 @@ def convert_to_object(
 
     elif class_name == "timetable":
         result = mat_to_timetable(props, add_table_attrs)
+
+    elif class_name == "containers.Map":
+        result = {"_Class": class_name, "_Props": toContainerMap(props)}
+        # Wrapping as container.map is also a dict
 
     else:
         # For all other classes, return raw data
