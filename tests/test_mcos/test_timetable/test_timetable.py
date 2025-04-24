@@ -130,6 +130,26 @@ from matio import load_from_mat
             "tt8.mat",
             "tt8",
         ),
+        (
+            pd.DataFrame(
+                {
+                    "data1": [1.0, 2.0, 3.0],
+                },
+                index=pd.Index(
+                    np.array(
+                        [
+                            "2020-01-01T00:00:00",
+                            "2020-04-01T00:00:01",
+                            "2020-07-01T00:00:02",
+                        ],
+                        dtype="datetime64[M]",
+                    ),
+                    name="Time",
+                ),
+            ),
+            "tt10.mat",
+            "tt10",
+        ),
     ],
     ids=[
         "simple-timetable-datetime",
@@ -140,6 +160,7 @@ from matio import load_from_mat
         "timetable-samplerate-starttime",
         "timetable-timestep-starttime",
         "timetable-varnames",
+        "timetable-calendarDuration-timestep",
     ],
 )
 def test_parse_timetable(expected_df, file_name, var_name):

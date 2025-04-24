@@ -2,7 +2,7 @@
 from .matmap import toContainerMap, toMatDictionary
 from .matstring import toString
 from .mattables import mat_to_categorical, mat_to_table, mat_to_timetable
-from .mattimes import toDatetime, toDuration
+from .mattimes import mat_to_calendarDuration, toDatetime, toDuration
 
 __all__ = [
     "mat_to_table",
@@ -13,4 +13,5 @@ __all__ = [
     "toContainerMap",
     "mat_to_categorical",
     "toMatDictionary",
+    "mat_to_calendarDuration",
 ]
