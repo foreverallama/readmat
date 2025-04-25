@@ -1,3 +1,5 @@
+from enum import Enum
+
 import numpy as np
 
 from matio.utils import (
@@ -47,12 +49,13 @@ def convert_to_object(
     return result
 
 
-def wrap_enumeration_instance(enum_array, shapes):
-    """Wraps enumeration instance data into a dictionary"""
-    wrapped_dict = {"_Values": np.empty(shapes, dtype=object)}
-    if len(enum_array) == 0:
-        wrapped_dict["_Values"] = np.array([], dtype=object)
-    else:
-        enum_props = [item.get("_Props", np.array([]))[0, 0] for item in enum_array]
-        wrapped_dict["_Values"] = np.array(enum_props).reshape(shapes, order="F")
-    return wrapped_dict
+def mat_to_enum(values, value_names, class_name, shapes):
+    """Converts MATLAB enum to Python enum"""
+
+    enum_class = Enum(
+        class_name,
+        {name: val["_Props"].item() for name, val in zip(value_names, values)},
+    )
+
+    enum_members = [enum_class(val["_Props"].item()) for val in values]
+    return np.array(enum_members, dtype=object).reshape(shapes, order="F")
