@@ -186,17 +186,7 @@ Enumeration instance arrays are stored as `mxOPAQUE_CLASS` arrays of `MCOS` type
 5. `ValueIndices`: The value indices of the enumeration array. This also indicates the dimensions of the enumeration array.
 6. `BuiltinClassName`: This is set if the enumeration class specifies a superclass. The value is a metadata indicator to extract the name of the superclass.
 
-Enumerations arrays are returned as dictionaries as follows:
-
-```python
-{
-    "_Tag": "EnumerationInstance",
-    "_ClassName": "ClassName",
-    "_BuiltinClassName": "BuiltinClassName",  # if exists else None
-    "_ValueNames": np.array([Name1, Name2]),
-    "_Values": np.array([]),
-}
-```
+Enumerations arrays are returned as a `numpy` array of members of `enum.Enum` class.
 
 ## Others
 
@@ -204,7 +194,3 @@ To add:
 
 1. `function_handle`
 2. `timeseries`
-3. `dynamicprops`
-4. `proplistener`
-5. Graphics Objects
-6. Java/.NET/COM objects

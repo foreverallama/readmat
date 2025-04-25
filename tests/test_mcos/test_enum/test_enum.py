@@ -1,4 +1,5 @@
 import os
+from enum import Enum
 
 import numpy as np
 import pytest
@@ -6,74 +7,59 @@ import pytest
 from matio import load_from_mat
 
 
+class EnumClass(Enum):
+    """Enum class for testing purposes."""
+
+    enum1 = {"val": np.array([1.0]).reshape(1, 1)}
+    enum2 = {"val": np.array([2.0]).reshape(1, 1)}
+    enum3 = {"val": np.array([3.0]).reshape(1, 1)}
+    enum4 = {"val": np.array([4.0]).reshape(1, 1)}
+    enum5 = {"val": np.array([5.0]).reshape(1, 1)}
+    enum6 = {"val": np.array([6.0]).reshape(1, 1)}
+
+
+class EnumClass2(Enum):
+    """Enum class for testing"""
+
+    enum1 = {"uint32.Data": np.array([1], dtype=np.uint32).reshape(1, 1)}
+
+
 @pytest.mark.parametrize(
     "expected_array, file_name, var_name",
     [
         (
-            {
-                "_Class": "EnumClass",
-                "_BuiltinClassName": None,
-                "_Tag": "EnumerationInstance",
-                "_ValueNames": np.array(["enum1"]).reshape(1, 1),
-                "_Values": np.array(
+            np.array(
+                [
                     [
-                        {
-                            "val": np.array([1]).reshape(1, 1),
-                        }
+                        EnumClass.enum1,
                     ]
-                ).reshape(1, 1),
-            },
+                ]
+            ),
             "enum_base.mat",
             "enum_base",
         ),
         (
-            {
-                "_Class": "EnumClass",
-                "_BuiltinClassName": None,
-                "_Tag": "EnumerationInstance",
-                "_ValueNames": np.array(
-                    ["enum1", "enum3", "enum5", "enum2", "enum4", "enum6"]
-                ).reshape(2, 3),
-                "_Values": np.array(
-                    [
-                        {
-                            "val": np.array([1]).reshape(1, 1),
-                        },
-                        {
-                            "val": np.array([3]).reshape(1, 1),
-                        },
-                        {
-                            "val": np.array([5]).reshape(1, 1),
-                        },
-                        {
-                            "val": np.array([2]).reshape(1, 1),
-                        },
-                        {
-                            "val": np.array([4]).reshape(1, 1),
-                        },
-                        {
-                            "val": np.array([6]).reshape(1, 1),
-                        },
-                    ]
-                ).reshape(2, 3),
-            },
+            np.array(
+                [
+                    EnumClass.enum1,
+                    EnumClass.enum2,
+                    EnumClass.enum3,
+                    EnumClass.enum4,
+                    EnumClass.enum5,
+                    EnumClass.enum6,
+                ]
+            ).reshape(2, 3, order="F"),
             "enum_array.mat",
             "enum_arr",
         ),
         (
-            {
-                "_Class": "EnumClass2",
-                "_BuiltinClassName": "uint32",
-                "_Tag": "EnumerationInstance",
-                "_ValueNames": np.array(["enum1"]).reshape(1, 1),
-                "_Values": np.array(
+            np.array(
+                [
                     [
-                        {
-                            "uint32.Data": np.array([1]).reshape(1, 1),
-                        },
+                        EnumClass2.enum1,
                     ]
-                ).reshape(1, 1),
-            },
+                ]
+            ),
             "enum_uint32.mat",
             "enum_uint32",
         ),
@@ -86,25 +72,14 @@ def test_enum_instance(expected_array, file_name, var_name):
 
     # Output format
     assert var_name in matdict
-    assert matdict[var_name].keys() == expected_array.keys()
+    assert matdict[var_name].shape == expected_array.shape
+    assert matdict[var_name].dtype == expected_array.dtype
 
-    # Class Name
-    assert matdict[var_name]["_Class"] == expected_array["_Class"]
-    assert matdict[var_name]["_BuiltinClassName"] == expected_array["_BuiltinClassName"]
-
-    # Value Names
-    np.testing.assert_array_equal(
-        matdict[var_name]["_ValueNames"], expected_array["_ValueNames"]
-    )
-
-    # Values
-    assert matdict[var_name]["_Values"].shape == expected_array["_Values"].shape
-    assert matdict[var_name]["_Values"].dtype == expected_array["_Values"].dtype
-    for idx in np.ndindex(expected_array["_Values"].shape):
-        expected_props = expected_array["_Values"][idx]
-        actual_props = matdict[var_name]["_Values"][idx]
-        for prop, val in expected_props.items():
-            np.testing.assert_array_equal(actual_props[prop], val)
+    for idx in np.ndindex(expected_array.shape):
+        actual_member = matdict[var_name][idx]
+        expected_member = expected_array[idx]
+        assert actual_member.name == expected_member.name
+        assert actual_member.value == expected_member.value
 
 
 @pytest.mark.parametrize(
@@ -115,37 +90,23 @@ def test_enum_instance(expected_array, file_name, var_name):
                 "_Class": "NestedClass",
                 "_Props": np.array(
                     {
-                        "objProp": {
-                            "_Class": "EnumClass",
-                            "_BuiltinClassName": None,
-                            "_Tag": "EnumerationInstance",
-                            "_ValueNames": np.array(["enum1"]).reshape(1, 1),
-                            "_Values": np.array(
+                        "objProp": np.array(
+                            [
                                 [
-                                    {
-                                        "val": np.array([1]).reshape(1, 1),
-                                    }
+                                    EnumClass.enum1,
                                 ]
-                            ).reshape(1, 1),
-                        },
+                            ]
+                        ),
                         "cellProp": np.array(
                             [
                                 [
-                                    {
-                                        "_Class": "EnumClass",
-                                        "_BuiltinClassName": None,
-                                        "_Tag": "EnumerationInstance",
-                                        "_ValueNames": np.array(["enum2"]).reshape(
-                                            1, 1
-                                        ),
-                                        "_Values": np.array(
+                                    np.array(
+                                        [
                                             [
-                                                {
-                                                    "val": np.array([2]).reshape(1, 1),
-                                                }
+                                                EnumClass.enum2,
                                             ]
-                                        ).reshape(1, 1),
-                                    }
+                                        ]
+                                    )
                                 ]
                             ],
                             dtype=object,
@@ -153,21 +114,13 @@ def test_enum_instance(expected_array, file_name, var_name):
                         "structProp": np.array(
                             [
                                 [
-                                    {
-                                        "_Class": "EnumClass",
-                                        "_BuiltinClassName": None,
-                                        "_Tag": "EnumerationInstance",
-                                        "_ValueNames": np.array(["enum3"]).reshape(
-                                            1, 1
-                                        ),
-                                        "_Values": np.array(
+                                    np.array(
+                                        [
                                             [
-                                                {
-                                                    "val": np.array([3]).reshape(1, 1),
-                                                }
+                                                EnumClass.enum3,
                                             ]
-                                        ).reshape(1, 1),
-                                    }
+                                        ]
+                                    )
                                 ]
                             ],
                             dtype=[("ObjField", "O")],
@@ -187,7 +140,6 @@ def test_enum_inside_object(expected_array, file_name, var_name):
 
     # Output format
     assert var_name in matdict
-    assert matdict[var_name].keys() == expected_array.keys()
 
     # Class Name
     assert matdict[var_name]["_Class"] == expected_array["_Class"]
@@ -201,97 +153,19 @@ def test_enum_inside_object(expected_array, file_name, var_name):
     expected_props = expected_array["_Props"][0, 0]
     for prop, val in expected_props.items():
         if prop == "cellProp":
-            nested_actual_dict = actual_props[prop][0, 0]
-            nested_expected_dict = val[0, 0]
-            print(nested_actual_dict)
-            print(nested_expected_dict)
-            # Class Name
-            assert nested_actual_dict["_Class"] == nested_expected_dict["_Class"]
-            assert (
-                nested_actual_dict["_BuiltinClassName"]
-                == nested_expected_dict["_BuiltinClassName"]
-            )
-
-            # Value Names
-            np.testing.assert_array_equal(
-                nested_actual_dict["_ValueNames"], nested_expected_dict["_ValueNames"]
-            )
-
-            # Values
-            assert (
-                nested_actual_dict["_Values"].shape
-                == nested_expected_dict["_Values"].shape
-            )
-            assert (
-                nested_actual_dict["_Values"].dtype
-                == nested_expected_dict["_Values"].dtype
-            )
-            for idx in np.ndindex(nested_expected_dict["_Values"].shape):
-                expected_sub_props = nested_expected_dict["_Values"][idx]
-                actual_sub_props = nested_actual_dict["_Values"][idx]
-                for prop, val in expected_sub_props.items():
-                    np.testing.assert_array_equal(actual_sub_props[prop], val)
+            nested_actual_member = actual_props[prop][0, 0][0, 0]
+            nested_expected_member = val[0, 0][0, 0]
+            assert nested_actual_member.name == nested_expected_member.name
+            assert nested_actual_member.value == nested_expected_member.value
 
         elif prop == "structProp":
-            nested_actual_dict = actual_props[prop]["ObjField"][0, 0]
-            nested_expected_dict = val["ObjField"][0, 0]
-            print(nested_actual_dict)
-            print(nested_expected_dict)
-
-            # Class Name
-            assert nested_actual_dict["_Class"] == nested_expected_dict["_Class"]
-            assert (
-                nested_actual_dict["_BuiltinClassName"]
-                == nested_expected_dict["_BuiltinClassName"]
-            )
-
-            # Value Names
-            np.testing.assert_array_equal(
-                nested_actual_dict["_ValueNames"], nested_expected_dict["_ValueNames"]
-            )
-
-            # Values
-            assert (
-                nested_actual_dict["_Values"].shape
-                == nested_expected_dict["_Values"].shape
-            )
-            assert (
-                nested_actual_dict["_Values"].dtype
-                == nested_expected_dict["_Values"].dtype
-            )
-            for idx in np.ndindex(nested_expected_dict["_Values"].shape):
-                expected_sub_props = nested_expected_dict["_Values"][idx]
-                actual_sub_props = nested_actual_dict["_Values"][idx]
-                for prop, val in expected_sub_props.items():
-                    np.testing.assert_array_equal(actual_sub_props[prop], val)
+            nested_actual_member = actual_props[prop]["ObjField"][0, 0][0, 0]
+            nested_expected_member = val["ObjField"][0, 0][0, 0]
+            assert nested_actual_member.name == nested_expected_member.name
+            assert nested_actual_member.value == nested_expected_member.value
 
         elif prop == "objProp":
-            nested_actual_dict = actual_props[prop]
-            nested_expected_dict = val
-
-            # Class Name
-            assert nested_actual_dict["_Class"] == nested_expected_dict["_Class"]
-            assert (
-                nested_actual_dict["_BuiltinClassName"]
-                == nested_expected_dict["_BuiltinClassName"]
-            )
-
-            # Value Names
-            np.testing.assert_array_equal(
-                nested_actual_dict["_ValueNames"], nested_expected_dict["_ValueNames"]
-            )
-
-            # Values
-            assert (
-                nested_actual_dict["_Values"].shape
-                == nested_expected_dict["_Values"].shape
-            )
-            assert (
-                nested_actual_dict["_Values"].dtype
-                == nested_expected_dict["_Values"].dtype
-            )
-            for idx in np.ndindex(nested_expected_dict["_Values"].shape):
-                expected_sub_props = nested_expected_dict["_Values"][idx]
-                actual_sub_props = nested_actual_dict["_Values"][idx]
-                for prop, val in expected_sub_props.items():
-                    np.testing.assert_array_equal(actual_sub_props[prop], val)
+            nested_actual_member = actual_props[prop][0, 0]
+            nested_expected_member = val[0, 0]
+            assert nested_actual_member.name == nested_expected_member.name
+            assert nested_actual_member.value == nested_expected_member.value

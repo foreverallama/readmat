@@ -2,7 +2,7 @@ import warnings
 
 import numpy as np
 
-from matio.convert import convert_to_object, wrap_enumeration_instance
+from matio.convert import convert_to_object, mat_to_enum
 
 
 class SubsystemReader:
@@ -369,11 +369,17 @@ class SubsystemReader:
         return result
 
     def read_mcos_enumeration(self, metadata):
-        """Reads enumeration object from the metadata"""
-
+        """Reads MCOS enumeration object from the metadata
+        Inputs:
+            metadata: Metadata for the enumeration object
+        Returns:
+            metadata: Metadata for the enumeration object
+            If raw_data is False, returns the enumeration object
+        """
         class_idx = metadata[0, 0]["ClassName"].item()
         builtin_class_index = metadata[0, 0]["BuiltinClassName"].item()
         value_name_idx = metadata[0, 0]["ValueNames"]
+        value_idx = metadata[0, 0]["ValueIndices"]
 
         handle_name, class_name = self.get_class_name(class_idx)
         if handle_name is not None:
@@ -385,25 +391,36 @@ class SubsystemReader:
         else:
             builtin_class_name = None
 
-        value_idx = metadata[0, 0]["ValueIndices"]
         value_names = [
             self.mcos_names[val - 1] for val in value_name_idx.ravel()
         ]  # Array is N x 1 shape
-        value_names = np.array(value_names).reshape(value_idx.shape, order="F")
 
-        enum_array = []
+        enum_vals = []
         mmdata = metadata[0, 0]["Values"]  # Array is N x 1 shape
         if mmdata.size != 0:
             mmdata_map = mmdata[value_idx]
             for val in np.nditer(mmdata_map, flags=["refs_ok"], op_flags=["readonly"]):
                 obj_array = self.read_normal_mcos(val.item())
-                enum_array.append(obj_array)
+                enum_vals.append(obj_array)
 
-        metadata = wrap_enumeration_instance(enum_array, value_idx.shape)
-        metadata["_ValueNames"] = value_names
-        metadata["_Class"] = class_name
-        metadata["_BuiltinClassName"] = builtin_class_name
-        metadata["_Tag"] = "EnumerationInstance"
+        if not self.raw_data:
+            enum_array = mat_to_enum(
+                enum_vals,
+                value_names,
+                class_name,
+                value_idx.shape,
+            )
+            return enum_array
+
+        metadata[0, 0]["BuiltinClassName"] = builtin_class_name
+        metadata[0, 0]["ClassName"] = class_name
+        metadata[0, 0]["ValueNames"] = np.array(value_names).reshape(
+            value_idx.shape, order="F"
+        )
+        metadata[0, 0]["ValueIndices"] = value_idx
+        metadata[0, 0]["Values"] = np.array(enum_vals).reshape(
+            value_idx.shape, order="F"
+        )
 
         return metadata
 
