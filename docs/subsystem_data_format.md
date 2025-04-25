@@ -80,7 +80,7 @@ This cell array is what we need to look at closely. The cell array has a dimensi
 
 ### Cell 1 - Linking Metadata
 
-The data in this cell is stored as a `mxUINT8` data element. However, the actual data consists of a combination of `uint8` integers and `uint32` integers. The contents consist of a large series of different types of metadata, ordered as follows:
+The data in this cell is stored as a `mxUINT8` data element. However, the actual data consists of a combination of `int8` integers and `uint32` (or maybe `int32`) integers. The contents consist of a large series of different types of metadata, ordered as follows:
 
 - `Version Indicator`: 32-bit integer indicating the version of `FileWrapper__` metadata. Afaik, the latest version is `4`.
 - `num_strings`: 32-bit integer indicating the total number of unique fields and classes of all objects in the MAT-file
@@ -120,11 +120,13 @@ This region stores field contents for classes using the `any` property.
 - Each sub-block is of the format `(field_name_index, field_type, field_value)`
   - The value `field_name_index` points to the field name in the list `names` obtained above
   - `field_type` indicates whether the field is a property or an attribute
+    - `field_type = 0` not sure what it indicates, but its used in some special objects
     - `field_type = 1` indicates a property
-    - `field_type = 2` indicates an attribute like `Hidden` or `Constant`, etc.
+    - `field_type = 2` indicates an attribute like `Hidden`, `Constant`, etc.
   - `field_value` depends on `field_type`
+    - If `field_type = 0`, `field_value` contains the index of the field name in linking metadata. These fields store the field name as a character array. These are probably used internally for enumerations.
     - If `field_type = 1`, `field_value` contains the index of the cell in the cell array containing the property contents. The indexing here starts from zero. However, it should be noted that the 0th index points to Cell 3 of the cell array.
-    - If `field_type = 2`, `field_value` contains a logical value, i.e., either `true` or `false`
+    - If `field_type = 2`, `field_value` contains the actual value itself. MATLAB internally decodes this based on the attribute type
 
 #### Region 4: Type 2 Object Metadata
 

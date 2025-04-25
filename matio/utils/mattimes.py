@@ -41,7 +41,7 @@ def toDatetime(props):
     if data.size == 0:
         return np.array([], dtype="datetime64[ms]")
     tz = props[0, 0].get("tz", None)
-    if tz.size > 0:
+    if tz is not None and tz.size > 0:
         offset = get_tz_offset(tz.item())
     else:
         offset = 0
@@ -65,6 +65,9 @@ def toDuration(props):
         return np.array([], dtype="timedelta64[ms]")
 
     fmt = props[0, 0].get("fmt", None)
+    if fmt is None:
+        return millis.astype("timedelta64[ms]")
+
     if fmt == "s":
         count = millis / 1000  # Seconds
         dur = count.astype("timedelta64[s]")

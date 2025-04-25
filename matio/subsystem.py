@@ -12,13 +12,17 @@ class SubsystemReader:
 
     def __init__(self, ss_array, byte_order, raw_data=False, add_table_attrs=False):
         self.ssdata = ss_array
-        self.byte_order = "<u4" if byte_order == "<" else ">u4"
+        self.byte_order = (
+            "<u4" if byte_order == "<" else ">u4"
+        )  # Could potentially be int32
         self.raw_data = raw_data
         self.add_table_attrs = add_table_attrs
         self.fwrap_metadata = None
-        self.fwrap_fields = None
+        self.fwrap_vals = None
         self.fwrap_defaults = None
         self.mcos_names = None
+        self.MAX_OBJECT_ID = -1
+        self.MAX_CLASS_ID = -1
         self.init_fields()
 
     def init_fields(self):
@@ -47,6 +51,19 @@ class SubsystemReader:
             self.fwrap_vals = fwrap_data[2:-3, 0]
             self.fwrap_defaults = fwrap_data[-3:, 0]
             self.mcos_names = self.get_field_names(fwrap_version_offsets)
+            self.MAX_OBJECT_ID, self.MAX_CLASS_ID = self.get_max_ids()
+
+    def get_max_ids(self):
+        """Extracts the maximum object and class IDs from the metadata"""
+
+        # Get offsets
+        cid_start, cid_end, oid_start, oid_end = np.frombuffer(
+            self.fwrap_metadata, dtype=self.byte_order, count=4, offset=8
+        )
+
+        max_class_id = (cid_end - cid_start) // 16 - 1
+        max_object_id = (oid_end - oid_start) // 24 - 1
+        return max_object_id, max_class_id
 
     def get_field_names(self, num_offsets):
         """Extracts field and class names from the subsystem data
@@ -219,31 +236,51 @@ class SubsystemReader:
         if not isinstance(arr, np.ndarray):
             return arr
 
-        if check_object_reference(arr):
+        if check_object_reference(arr, self.MAX_OBJECT_ID, self.MAX_CLASS_ID):
             return self.read_mcos_object(arr)
 
         elif arr.dtype == object:
             # Iterate through cell arrays
             for idx in np.ndindex(arr.shape):
                 cell_item = arr[idx]
-                if check_object_reference(cell_item):
+                if check_object_reference(
+                    cell_item, self.MAX_OBJECT_ID, self.MAX_CLASS_ID
+                ):
                     arr[idx] = self.read_mcos_object(cell_item)
                 else:
                     self.find_object_reference(cell_item, path + (idx,))
                 # Path to keep track of the current index
         elif arr.dtype.names:
             # Iterate through struct array
-            if check_object_reference(arr):
+            if check_object_reference(arr, self.MAX_OBJECT_ID, self.MAX_CLASS_ID):
                 return self.read_mcos_object(arr)
             for idx in np.ndindex(arr.shape):
                 for name in arr.dtype.names:
                     field_val = arr[idx][name]
-                    if check_object_reference(field_val):
+                    if check_object_reference(
+                        field_val, self.MAX_OBJECT_ID, self.MAX_CLASS_ID
+                    ):
                         arr[idx][name] = self.read_mcos_object(field_val)
                     else:
                         self.find_object_reference(field_val, path + (idx, name))
 
         return arr
+
+    def parse_field_types(self, field_type, field_value, field_idx):
+        """Parses field types and values for an object"""
+
+        if field_type == 0:
+            val = self.mcos_names[field_value - 1]
+        elif field_type == 1:
+            val = self.find_object_reference(self.fwrap_vals[field_value])
+        elif field_type == 2:
+            if field_value < 0 or field_value > 1:
+                print("Field Value Found!", field_idx, field_type, field_value)
+            val = field_value
+        else:
+            raise ValueError(f"Unknown field type: {field_type}")
+
+        return val
 
     def extract_fields(self, type1_id, type2_id, dep_id):
         """Extracts the properties for an object
@@ -269,15 +306,9 @@ class SubsystemReader:
         obj_props = {}
         field_ids = self.get_ids(obj_type_id, byte_offset, nbytes=12)
         for field_idx, field_type, field_value in field_ids:
-            if field_type == 1:
-                field_content = self.find_object_reference(self.fwrap_vals[field_value])
-                obj_props[self.mcos_names[field_idx - 1]] = field_content
-            elif field_type == 2:
-                obj_props[self.mcos_names[field_idx - 1]] = np.array(
-                    field_value, dtype=np.bool_
-                )
-            else:
-                raise ValueError(f"Unknown field type: {field_type}")
+            obj_props[self.mcos_names[field_idx - 1]] = self.parse_field_types(
+                field_type, field_value, field_idx
+            )
 
         # Include Handle Values
         handles = self.extract_handles(dep_id)
@@ -298,6 +329,17 @@ class SubsystemReader:
                 - _Props: Numpy array of object properties
         """
 
+        # Attach class name to the object
+        handle_name, class_name = self.get_class_name(class_id)
+        if handle_name is not None:
+            class_name = f"{handle_name}.{class_name}"
+
+        if object_ids.size == 0:
+            return {
+                "_Class": class_name,
+                "_Props": np.empty((0, 0), dtype=object),
+            }
+
         props_list = []
         for object_id in object_ids:
             _, type1_id, type2_id, dep_id = self.get_object_dependencies(object_id)
@@ -314,11 +356,6 @@ class SubsystemReader:
                 for idx in np.ndindex(obj_props.shape):
                     if name not in obj_props[idx]:
                         obj_props[idx][name] = default_val
-
-        # Attach class name to the object
-        handle_name, class_name = self.get_class_name(class_id)
-        if handle_name is not None:
-            class_name = f"{handle_name}.{class_name}"
 
         # Converts some common MATLAB objects to Python objects
         result = convert_to_object(
@@ -414,8 +451,9 @@ def check_enumeration_instance_tag(metadata):
     return False
 
 
-def check_object_reference(metadata):
+def check_object_reference(metadata, max_object_id, max_class_id):
     """Checks if the metadata is a valid object reference"""
+    # Not sure if they include checks for max_object_id/max_class_id
     if not isinstance(metadata, np.ndarray):
         return False
 
@@ -425,9 +463,9 @@ def check_object_reference(metadata):
     if metadata.dtype != np.uint32:
         return False
 
-    if metadata.size < 6:
+    if metadata.size < 5:
         return False
-    if len(metadata.shape) != 2 or metadata.shape[1] != 1:
+    if len(metadata.shape) == 2 and metadata.shape[1] != 1:
         return False
 
     ref = metadata[0, 0]
@@ -439,14 +477,21 @@ def check_object_reference(metadata):
         return False
 
     dims = metadata[2 : 2 + ndims, 0]
-    total_objs = np.prod(np.array(dims))
-    if total_objs <= 0:
-        return False
+    total_objs = np.prod(dims)
+    if total_objs == 0:
+        # Can be an empty 0D object array
+        if metadata.shape[0] != 3 + ndims:
+            return False
+        if metadata[-1, 0] > max_class_id:
+            return False
+        return True
 
     object_ids = metadata[2 + ndims : 2 + ndims + total_objs, 0]
     if np.any(object_ids <= 0):
         return False
     if object_ids.size + ndims + 3 != metadata.shape[0]:
+        return False
+    if np.any(object_ids > max_object_id):
         return False
 
     class_id = metadata[-1, 0]
