@@ -248,13 +248,19 @@ class SubsystemReader:
 
         return arr
 
-    def parse_field_types(self, field_type, field_value, field_idx):
+    def parse_field_types(
+        self, field_type, field_value, field_idx, type1_id, class_name
+    ):
         """Parses field types and values for an object"""
 
         if field_type == 0:
             val = self.mcos_names[field_value - 1]
         elif field_type == 1:
-            val = self.find_object_reference(self.fwrap_vals[field_value])
+            if type1_id and class_name == "function_handle_object":
+                # Special case to break circular reference in nested function handle
+                val = self.fwrap_vals[field_value]
+            else:
+                val = self.find_object_reference(self.fwrap_vals[field_value])
         elif field_type == 2:
             if field_value < 0 or field_value > 1:
                 print("Field Value Found!", field_idx, field_type, field_value)
@@ -264,7 +270,7 @@ class SubsystemReader:
 
         return val
 
-    def extract_fields(self, object_id):
+    def extract_fields(self, object_id, class_name):
         """Extracts the properties for an object
         Inputs:
             (type1_id, type2_id, dep_id): Dependency IDs of the object
@@ -291,8 +297,9 @@ class SubsystemReader:
         field_ids = self.get_ids(obj_type_id, byte_offset, nbytes=12)
         for field_idx, field_type, field_value in field_ids:
             obj_props[self.mcos_names[field_idx - 1]] = self.parse_field_types(
-                field_type, field_value, field_idx
+                field_type, field_value, field_idx, type1_id, class_name
             )
+            # Sending type1_id to parse_field for special case of nested function handle
 
         # Include Handle Values
         handles = self.extract_handles(dep_id)
@@ -332,7 +339,7 @@ class SubsystemReader:
 
         props_list = []
         for object_id in object_ids:
-            obj_props = self.extract_fields(object_id)
+            obj_props = self.extract_fields(object_id, class_name)
             props_list.append(obj_props)
         obj_props = np.array(props_list).reshape(dims)
 
