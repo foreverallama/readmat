@@ -1,3 +1,5 @@
+"""Reads MCOS subsystem data from MAT files"""
+
 import warnings
 
 import numpy as np
@@ -10,8 +12,7 @@ class SubsystemReader:
     Currently only supports MCOS objects
     """
 
-    def __init__(self, ss_array, byte_order, raw_data=False, add_table_attrs=False):
-        self.ssdata = ss_array
+    def __init__(self, ssdata, byte_order, raw_data=False, add_table_attrs=False):
         self.byte_order = (
             "<u4" if byte_order == "<" else ">u4"
         )  # Could potentially be int32
@@ -23,9 +24,9 @@ class SubsystemReader:
         self.mcos_names = None
         self.MAX_OBJECT_ID = -1
         self.MAX_CLASS_ID = -1
-        self.init_fields()
+        self.init_fields(ssdata)
 
-    def init_fields(self):
+    def init_fields(self, ssdata):
         """Fetches metadata and field contents from the subsystem data
         Currently only supports MCOS objects
         Attributes:
@@ -34,19 +35,19 @@ class SubsystemReader:
             3. fwrap_defaults: Numpy array of default properties of MCOS classes
             4. mcos_names: List of field and class names of all MCOS objects in file
         """
-        if "MCOS" in self.ssdata.dtype.names:
-            fwrap_data = self.ssdata[0, 0]["MCOS"][0]["_Metadata"]
+        if "MCOS" in ssdata.dtype.names:
+            fwrap_data = ssdata[0, 0]["MCOS"][0]["_Metadata"]
             self.fwrap_metadata = fwrap_data[0, 0][:, 0]
             toc_flag = np.frombuffer(
                 self.fwrap_metadata, dtype=self.byte_order, count=1, offset=0
             )[0]
-            if toc_flag <= 1 or toc_flag > 4:
-                raise ValueError("Incompatible FileWrapper version")
-            if toc_flag == 2 or toc_flag == 3:
+            if toc_flag in (2, 3):
                 # Not sure
                 fwrap_version_offsets = 6
             elif toc_flag == 4:
                 fwrap_version_offsets = 8
+            else:
+                raise ValueError("Incompatible FileWrapper version")
 
             self.fwrap_vals = fwrap_data[2:-3, 0]
             self.fwrap_defaults = fwrap_data[-3:, 0]
@@ -140,14 +141,14 @@ class SubsystemReader:
         handle_name = self.mcos_names[handle_idx - 1] if handle_idx > 0 else None
         return handle_name, class_name
 
-    def get_ids(self, id, byte_offset, nbytes):
+    def get_ids(self, m_id, byte_offset, nbytes):
         """Extract nblocks and subblock contents for a given object
         Helper method to parse metadata with the format:
             1. nsubblocks (4 bytes)
             2. subblock contents (nblocks * nbytes)
 
         Inputs:
-            1. id: ID of the object
+            1. m_id: ID of the object
             2. byte_offset: Offset to start reading from
             3. nbytes: Number of bytes in each subblock
         Returns:
@@ -155,14 +156,14 @@ class SubsystemReader:
         """
 
         # Get block corresponding to type ID
-        while id > 0:
+        while m_id > 0:
             nblocks = np.frombuffer(
                 self.fwrap_metadata, dtype=self.byte_order, count=1, offset=byte_offset
             )[0]
             byte_offset = byte_offset + 4 + nblocks * nbytes
             if ((nblocks * nbytes) + 4) % 8 != 0:
                 byte_offset += 4
-            id -= 1
+            m_id -= 1
 
         # Get the number of blocks
         nblocks = np.frombuffer(
@@ -239,7 +240,7 @@ class SubsystemReader:
         if check_object_reference(arr, self.MAX_OBJECT_ID, self.MAX_CLASS_ID):
             return self.read_mcos_object(arr)
 
-        elif arr.dtype == object:
+        if arr.dtype == object:
             # Iterate through cell arrays
             for idx in np.ndindex(arr.shape):
                 cell_item = arr[idx]
@@ -282,13 +283,15 @@ class SubsystemReader:
 
         return val
 
-    def extract_fields(self, type1_id, type2_id, dep_id):
+    def extract_fields(self, object_id):
         """Extracts the properties for an object
         Inputs:
             (type1_id, type2_id, dep_id): Dependency IDs of the object
         Returns:
             1. obj_props: Dictionary of object properties keyed by property names
         """
+
+        _, type1_id, type2_id, dep_id = self.get_object_dependencies(object_id)
 
         if type1_id == 0 and type2_id != 0:
             obj_type_id = type2_id
@@ -342,8 +345,7 @@ class SubsystemReader:
 
         props_list = []
         for object_id in object_ids:
-            _, type1_id, type2_id, dep_id = self.get_object_dependencies(object_id)
-            obj_props = self.extract_fields(type1_id, type2_id, dep_id)
+            obj_props = self.extract_fields(object_id)
             props_list.append(obj_props)
         obj_props = np.array(props_list).reshape(dims)
 
@@ -363,8 +365,8 @@ class SubsystemReader:
         )
 
         # Remaining unknown class properties
-        _u1 = self.fwrap_defaults[0][class_id, 0]
-        _u2 = self.fwrap_defaults[1][class_id, 0]
+        # _u1 = self.fwrap_defaults[0][class_id, 0]
+        # _u2 = self.fwrap_defaults[1][class_id, 0]
 
         return result
 
@@ -376,14 +378,14 @@ class SubsystemReader:
             metadata: Metadata for the enumeration object
             If raw_data is False, returns the enumeration object
         """
-        class_idx = metadata[0, 0]["ClassName"].item()
-        builtin_class_index = metadata[0, 0]["BuiltinClassName"].item()
-        value_name_idx = metadata[0, 0]["ValueNames"]
-        value_idx = metadata[0, 0]["ValueIndices"]
 
-        handle_name, class_name = self.get_class_name(class_idx)
+        handle_name, class_name = self.get_class_name(
+            metadata[0, 0]["ClassName"].item()
+        )
         if handle_name is not None:
             class_name = f"{handle_name}.{class_name}"
+
+        builtin_class_index = metadata[0, 0]["BuiltinClassName"].item()
         if builtin_class_index != 0:
             handle_name, builtin_class_name = self.get_class_name(builtin_class_index)
             if handle_name is not None:
@@ -392,10 +394,11 @@ class SubsystemReader:
             builtin_class_name = None
 
         value_names = [
-            self.mcos_names[val - 1] for val in value_name_idx.ravel()
+            self.mcos_names[val - 1] for val in metadata[0, 0]["ValueNames"].ravel()
         ]  # Array is N x 1 shape
 
         enum_vals = []
+        value_idx = metadata[0, 0]["ValueIndices"]
         mmdata = metadata[0, 0]["Values"]  # Array is N x 1 shape
         if mmdata.size != 0:
             mmdata_map = mmdata[value_idx]
@@ -446,14 +449,14 @@ class SubsystemReader:
         if metadata.dtype.names is not None:
             if "EnumerationInstanceTag" in metadata.dtype.names:
                 return self.read_mcos_enumeration(metadata)
-            else:
-                warnings.warn(
-                    "Couldn't read MCOS object type, returning object metadata",
-                    UserWarning,
-                )
-                return metadata
 
-        elif metadata.dtype == np.uint32:
+            warnings.warn(
+                "Couldn't read MCOS object type, returning object metadata",
+                UserWarning,
+            )
+            return metadata
+
+        if metadata.dtype == np.uint32:
             return self.read_normal_mcos(metadata)
 
         return metadata
@@ -477,16 +480,14 @@ def check_object_reference(metadata, max_object_id, max_class_id):
     if check_enumeration_instance_tag(metadata):
         return True
 
-    if metadata.dtype != np.uint32:
+    if metadata.dtype != np.uint32 or metadata.size < 5:
         return False
 
-    if metadata.size < 5:
-        return False
     if len(metadata.shape) == 2 and metadata.shape[1] != 1:
         return False
 
-    ref = metadata[0, 0]
-    if ref != 0xDD000000:
+    # Magic Value
+    if metadata[0, 0] != 0xDD000000:
         return False
 
     ndims = metadata[1, 0]
@@ -497,21 +498,15 @@ def check_object_reference(metadata, max_object_id, max_class_id):
     total_objs = np.prod(dims)
     if total_objs == 0:
         # Can be an empty 0D object array
-        if metadata.shape[0] != 3 + ndims:
-            return False
-        if metadata[-1, 0] > max_class_id:
+        if metadata.shape[0] != 3 + ndims or metadata[-1, 0] > max_class_id:
             return False
         return True
 
     object_ids = metadata[2 + ndims : 2 + ndims + total_objs, 0]
-    if np.any(object_ids <= 0):
+    if np.any(object_ids <= 0) or np.any(object_ids > max_object_id):
         return False
     if object_ids.size + ndims + 3 != metadata.shape[0]:
         return False
-    if np.any(object_ids > max_object_id):
-        return False
 
     class_id = metadata[-1, 0]
-    if class_id <= 0:
-        return False
-    return True
+    return 0 < class_id <= max_class_id

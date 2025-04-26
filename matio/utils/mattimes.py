@@ -1,6 +1,8 @@
+"""Utility functions for converting MATLAB datetime, duration, and calendarDuration"""
+
 import warnings
 from datetime import datetime
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import numpy as np
 
@@ -19,7 +21,7 @@ def get_tz_offset(tz):
             offset = int(utc_offset.total_seconds() * 1000)
         else:
             offset = 0
-    except Exception as e:
+    except ZoneInfoNotFoundError as e:
         warnings.warn(
             f"Could not get timezone offset for {tz}: {e}. Defaulting to UTC."
         )
@@ -27,7 +29,7 @@ def get_tz_offset(tz):
     return offset
 
 
-def toDatetime(props):
+def mat_to_datetime(props):
     """Convert MATLAB datetime to Python datetime
     Datetime returned as numpy.datetime64[ms]
 
@@ -51,7 +53,7 @@ def toDatetime(props):
     return millis.astype("datetime64[ms]")
 
 
-def toDuration(props):
+def mat_to_duration(props):
     """Convert MATLAB duration to Python timedelta
     Duration returned as numpy.timedelta64
 
@@ -91,7 +93,7 @@ def toDuration(props):
     return dur
 
 
-def mat_to_calendarDuration(props):
+def mat_to_calendarduration(props):
     """Convert MATLAB calendarDuration to Python timedelta
     CalendarDuration returned as numpy.timedelta64
 

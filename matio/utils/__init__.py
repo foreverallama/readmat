@@ -1,17 +1,18 @@
-# matio/utils/__init__.py
-from .matmap import toContainerMap, toMatDictionary
-from .matstring import toString
+"""Conversion utilities for matio"""
+
+from .matmap import mat_to_containermap, mat_to_dictionary
+from .matstring import mat_to_string
 from .mattables import mat_to_categorical, mat_to_table, mat_to_timetable
-from .mattimes import mat_to_calendarDuration, toDatetime, toDuration
+from .mattimes import mat_to_calendarduration, mat_to_datetime, mat_to_duration
 
 __all__ = [
-    "toContainerMap",
-    "toMatDictionary",
-    "toString",
+    "mat_to_containermap",
+    "mat_to_dictionary",
+    "mat_to_string",
     "mat_to_categorical",
     "mat_to_table",
     "mat_to_timetable",
-    "mat_to_calendarDuration",
-    "toDatetime",
-    "toDuration",
+    "mat_to_calendarduration",
+    "mat_to_datetime",
+    "mat_to_duration",
 ]

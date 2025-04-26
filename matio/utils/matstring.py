@@ -1,9 +1,11 @@
+"""Utility functions for convertin MATLAB strings"""
+
 import warnings
 
 import numpy as np
 
 
-def toString(props, byte_order):
+def mat_to_string(props, byte_order):
     """Parse string data from MATLAB file
     String objects are stored as "any" properties in MAT-files.
 
@@ -19,8 +21,7 @@ def toString(props, byte_order):
     if data.size == 0:
         return np.array([[]], dtype=np.str_)
 
-    version = data[0, 0]
-    if version != 1:
+    if data[0, 0] != 1:
         warnings.warn(
             "String saved from a different MAT-file version. This may work unexpectedly",
             UserWarning,
@@ -30,8 +31,7 @@ def toString(props, byte_order):
     shape = data[0, 2 : 2 + ndims]
     num_strings = np.prod(shape)
     char_counts = data[0, 2 + ndims : 2 + ndims + num_strings]
-    offset = 2 + ndims + num_strings  # start of string data
-    byte_data = data[0, offset:].tobytes()
+    byte_data = data[0, 2 + ndims + num_strings :].tobytes()
 
     strings = []
     pos = 0

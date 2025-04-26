@@ -1,17 +1,19 @@
+"""Convert MATLAB objects to Python compatible objects"""
+
 from enum import Enum
 
 import numpy as np
 
 from matio.utils import (
-    mat_to_calendarDuration,
+    mat_to_calendarduration,
     mat_to_categorical,
+    mat_to_containermap,
+    mat_to_datetime,
+    mat_to_dictionary,
+    mat_to_duration,
+    mat_to_string,
     mat_to_table,
     mat_to_timetable,
-    toContainerMap,
-    toDatetime,
-    toDuration,
-    toMatDictionary,
-    toString,
 )
 
 
@@ -27,18 +29,18 @@ def convert_to_object(
         }
 
     class_to_function = {
-        "datetime": lambda: toDatetime(props),
-        "duration": lambda: toDuration(props),
-        "string": lambda: toString(props, byte_order),
+        "datetime": lambda: mat_to_datetime(props),
+        "duration": lambda: mat_to_duration(props),
+        "string": lambda: mat_to_string(props, byte_order),
         "table": lambda: mat_to_table(props, add_table_attrs),
         "timetable": lambda: mat_to_timetable(props, add_table_attrs),
         "containers.Map": lambda: {
             "_Class": class_name,
-            "_Props": toContainerMap(props),
+            "_Props": mat_to_containermap(props),
         },
         "categorical": lambda: mat_to_categorical(props),
-        "dictionary": lambda: toMatDictionary(props),
-        "calendarDuration": lambda: mat_to_calendarDuration(props),
+        "dictionary": lambda: mat_to_dictionary(props),
+        "calendarDuration": lambda: mat_to_calendarduration(props),
     }
 
     result = class_to_function.get(
