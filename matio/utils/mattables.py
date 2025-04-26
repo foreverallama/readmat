@@ -1,3 +1,5 @@
+"""Utility functions for converting MATLAB tables and timetables to pandas DataFrames"""
+
 import warnings
 
 import numpy as np
@@ -58,7 +60,7 @@ def add_timetable_props(df, tab_props):
     return df
 
 
-def toDataFrame(data, nvars, varnames):
+def to_dataframe(data, nvars, varnames):
     """Creates a dataframe from coldata and column names"""
     rows = {}
     for i in range(nvars):
@@ -94,7 +96,7 @@ def mat_to_table(props, add_table_attrs=False):
     data = props[0, 0]["data"]
     nvars = int(props[0, 0]["nvars"].item())
     varnames = props[0, 0]["varnames"]
-    df = toDataFrame(data, nvars, varnames)
+    df = to_dataframe(data, nvars, varnames)
 
     # Add df.index
     nrows = int(props[0, 0]["nrows"].item())
@@ -112,7 +114,7 @@ def mat_to_table(props, add_table_attrs=False):
     return df
 
 
-def get_row_times(rowTimes, numRows):
+def get_row_times(row_times, num_rows):
     """Get row times from MATLAB timetable
     rowTimes is a duration or datetime array if explicitly specified
     If using "SampleRate" or "TimeStep", it is a struct array with the following fields:
@@ -121,15 +123,15 @@ def get_row_times(rowTimes, numRows):
     3. stepSize - the time step as a duration scalar
     4. sampleRate - the sample rate as a float
     """
-    if not rowTimes.dtype.names:
-        return rowTimes.ravel()
+    if not row_times.dtype.names:
+        return row_times.ravel()
 
-    start = rowTimes[0, 0]["origin"]
-    if rowTimes[0, 0]["specifiedAsRate"]:
-        fs = rowTimes[0, 0]["sampleRate"].item()
+    start = row_times[0, 0]["origin"]
+    if row_times[0, 0]["specifiedAsRate"]:
+        fs = row_times[0, 0]["sampleRate"].item()
         step = np.timedelta64(int(1e9 / fs), "ns")
     else:
-        step = rowTimes[0, 0]["stepSize"]
+        step = row_times[0, 0]["stepSize"]
         if step.dtype.names is not None and "calendarDuration" in step.dtype.names:
             comps = step[0, 0]["calendarDuration"]
             step = comps[0] or comps[1] or comps[2]
@@ -139,7 +141,7 @@ def get_row_times(rowTimes, numRows):
         else:
             step = step.astype("timedelta64[ns]")
 
-    return (start + step * np.arange(numRows)).ravel()
+    return (start + step * np.arange(num_rows)).ravel()
 
 
 def mat_to_timetable(props, add_table_attrs=False):
@@ -153,17 +155,17 @@ def mat_to_timetable(props, add_table_attrs=False):
             UserWarning,
         )
 
-    numVars = int(props[0, 0]["any"][0, 0]["numVars"].item())
-    varNames = props[0, 0]["any"][0, 0]["varNames"]
+    num_vars = int(props[0, 0]["any"][0, 0]["numVars"].item())
+    var_names = props[0, 0]["any"][0, 0]["varNames"]
     data = props[0, 0]["any"][0, 0]["data"]
-    df = toDataFrame(data, numVars, varNames)
+    df = to_dataframe(data, num_vars, var_names)
 
-    rowTimes = props[0, 0]["any"][0, 0]["rowTimes"]
-    numRows = int(props[0, 0]["any"][0, 0]["numRows"].item())
+    row_times = props[0, 0]["any"][0, 0]["rowTimes"]
+    num_rows = int(props[0, 0]["any"][0, 0]["numRows"].item())
 
-    rowTimes = get_row_times(rowTimes, numRows)
-    dimNames = props[0, 0]["any"][0, 0]["dimNames"]
-    df.index = pd.Index(rowTimes, name=dimNames[0, 0].item())
+    row_times = get_row_times(row_times, num_rows)
+    dim_names = props[0, 0]["any"][0, 0]["dimNames"]
+    df.index = pd.Index(row_times, name=dim_names[0, 0].item())
 
     if add_table_attrs:
         # Since pandas lists this as experimental, flag so we can switch off if it breaks

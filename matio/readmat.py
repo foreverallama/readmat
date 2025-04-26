@@ -1,3 +1,5 @@
+"""Reads MAT-files and extracts variables including MATLAB objects"""
+
 from io import BytesIO
 
 import numpy as np
@@ -8,18 +10,18 @@ from scipy.io.matlab._mio5_params import OPAQUE_DTYPE
 from matio.subsystem import SubsystemReader
 
 
-def get_matfile_version(ssStream):
+def get_matfile_version(ss_stream):
     """Reads subsystem MAT-file version and endianness
     Inputs
-        1. ssStream (BytesIO): Subsystem data stream
+        1. ss_stream (BytesIO): Subsystem data stream
     Returns:
         1. v_major (int): Major version
         2. v_minor (int): Minor version
         3. byte_order (str): Endianness
     """
 
-    ssStream.seek(0)
-    data = ssStream.read(4)
+    ss_stream.seek(0)
+    data = ss_stream.read(4)
     maj_ind = int(data[2] == b"I"[0])
     v_major = int(data[maj_ind])
     v_minor = int(data[1 - maj_ind])
@@ -28,9 +30,7 @@ def get_matfile_version(ssStream):
         return v_major, v_minor, byte_order
 
     # Unsure if Subsystem and MAT-file versions can be different
-    raise ValueError(
-        "Unknown subsystem data type, version {}, {}".format(v_major, v_minor)
-    )
+    raise ValueError(f"Unknown subsystem data type, version {v_major}.{v_minor}")
 
 
 def read_subsystem(ssdata, **kwargs):
@@ -42,23 +42,23 @@ def read_subsystem(ssdata, **kwargs):
         1. subsystem data (numpy.ndarray): Parsed subsystem data
         2. byte_order (str)
     """
-    ssStream = BytesIO(ssdata)
+    ss_stream = BytesIO(ssdata)
 
-    mjv, mnv, byte_order = get_matfile_version(ssStream)
+    mjv, mnv, byte_order = get_matfile_version(ss_stream)
     if mjv != 1:
         raise NotImplementedError(f"Subsystem version {mjv}.{mnv} not supported")
 
     kwargs.pop("byte_order", None)
     kwargs.pop("variable_names", None)
 
-    ssStream.seek(8)  # Skip subsystem header
-    MR = MatFile5Reader(ssStream, byte_order=byte_order, **kwargs)
-    MR.initialize_read()
-    hdr, _ = MR.read_var_header()
+    ss_stream.seek(8)  # Skip subsystem header
+    mat_reader = MatFile5Reader(ss_stream, byte_order=byte_order, **kwargs)
+    mat_reader.initialize_read()
+    hdr, _ = mat_reader.read_var_header()
     try:
-        res = MR.read_var_array(hdr, process=False)
+        res = mat_reader.read_var_array(hdr, process=False)
     except Exception as err:
-        raise ValueError(f"Error reading subsystem data: {err}")
+        raise ValueError(f"Error reading subsystem data: {err}") from err
 
     return res, byte_order
 
@@ -103,7 +103,7 @@ def find_opaque_dtype(arr, subsystem, path=()):
         metadata = arr[0]["_Metadata"]
         return subsystem.read_mcos_object(metadata, type_system)
 
-    elif arr.dtype == object:
+    if arr.dtype == object:
         # Iterate through cell arrays
         for idx in np.ndindex(arr.shape):
             cell_item = arr[idx]

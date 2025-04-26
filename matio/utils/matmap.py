@@ -1,7 +1,9 @@
+"""Utility functions for converting MATLAB containerMap and Dictionary"""
+
 import warnings
 
 
-def toContainerMap(props):
+def mat_to_containermap(props):
     """Converts the properties of a container map to a dictionary
     MATLAB container.map:
     - Property: serialization
@@ -20,7 +22,7 @@ def toContainerMap(props):
     return result
 
 
-def toMatDictionary(props):
+def mat_to_dictionary(props):
     """Converts the properties of a MATLAB dictionary to a dictionary
     MATLAB dictionary:
     - Property: data
@@ -32,7 +34,7 @@ def toMatDictionary(props):
     ver = int(props[0, 0]["data"][0, 0]["Version"].item())
     if ver != 1:
         warnings.warn(
-            "Only v1 MATLAB dictionaries are supported. Got v{}".format(ver),
+            f"Only v1 MATLAB dictionaries are supported. Got v{ver}",
             UserWarning,
         )
 
