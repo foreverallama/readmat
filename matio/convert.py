@@ -16,6 +16,29 @@ from matio.utils import (
     mat_to_timetable,
 )
 
+CLASS_TO_FUNCTION = {
+    "datetime": lambda props, byte_order, add_table_attrs: mat_to_datetime(props),
+    "duration": lambda props, byte_order, add_table_attrs: mat_to_duration(props),
+    "string": lambda props, byte_order, add_table_attrs: mat_to_string(
+        props, byte_order
+    ),
+    "table": lambda props, byte_order, add_table_attrs: mat_to_table(
+        props, add_table_attrs
+    ),
+    "timetable": lambda props, byte_order, add_table_attrs: mat_to_timetable(
+        props, add_table_attrs
+    ),
+    "containers.Map": lambda props, byte_order, add_table_attrs: {
+        "_Class": "containers.Map",
+        "_Props": mat_to_containermap(props),
+    },
+    "categorical": lambda props, byte_order, add_table_attrs: mat_to_categorical(props),
+    "dictionary": lambda props, byte_order, add_table_attrs: mat_to_dictionary(props),
+    "calendarDuration": lambda props,
+    byte_order,
+    add_table_attrs: mat_to_calendarduration(props),
+}
+
 
 def convert_to_object(
     props, class_name, byte_order, raw_data=False, add_table_attrs=False
@@ -28,25 +51,13 @@ def convert_to_object(
             "_Props": props,
         }
 
-    class_to_function = {
-        "datetime": lambda: mat_to_datetime(props),
-        "duration": lambda: mat_to_duration(props),
-        "string": lambda: mat_to_string(props, byte_order),
-        "table": lambda: mat_to_table(props, add_table_attrs),
-        "timetable": lambda: mat_to_timetable(props, add_table_attrs),
-        "containers.Map": lambda: {
-            "_Class": class_name,
-            "_Props": mat_to_containermap(props),
-        },
-        "categorical": lambda: mat_to_categorical(props),
-        "dictionary": lambda: mat_to_dictionary(props),
-        "calendarDuration": lambda: mat_to_calendarduration(props),
-    }
-
-    result = class_to_function.get(
+    result = CLASS_TO_FUNCTION.get(
         class_name,
-        lambda: {"_Class": class_name, "_Props": props},  # Default case
-    )()
+        lambda props, byte_order, add_table_attrs: {
+            "_Class": class_name,
+            "_Props": props,
+        },  # Default case
+    )(props, byte_order, add_table_attrs)
 
     return result
 
