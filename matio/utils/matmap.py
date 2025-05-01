@@ -3,7 +3,7 @@
 import warnings
 
 
-def mat_to_containermap(props):
+def mat_to_containermap(props, **_kwargs):
     """Converts the properties of a container map to a dictionary
     MATLAB container.map:
     - Property: serialization
@@ -22,7 +22,7 @@ def mat_to_containermap(props):
     return result
 
 
-def mat_to_dictionary(props):
+def mat_to_dictionary(props, **_kwargs):
     """Converts the properties of a MATLAB dictionary to a dictionary
     MATLAB dictionary:
     - Property: data

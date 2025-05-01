@@ -1,11 +1,14 @@
 """Utility functions for convertin MATLAB strings"""
 
+import sys
 import warnings
 
 import numpy as np
 
+DEFAULT_ENCODING = "<" if sys.byteorder == "little" else ">"
 
-def mat_to_string(props, byte_order):
+
+def mat_to_string(props, byte_order=DEFAULT_ENCODING, **_kwargs):
     """Parse string data from MATLAB file
     String objects are stored as "any" properties in MAT-files.
 
@@ -17,7 +20,7 @@ def mat_to_string(props, byte_order):
         5. List of null-terminated strings as uint16 integers
     """
 
-    data = props[0, 0].get("any", np.array([]))
+    data = props[0, 0].get("any", np.empty((0, 0), dtype=np.str_))
     if data.size == 0:
         return np.array([[]], dtype=np.str_)
 

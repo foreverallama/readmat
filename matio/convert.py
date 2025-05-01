@@ -17,26 +17,18 @@ from matio.utils import (
 )
 
 CLASS_TO_FUNCTION = {
-    "datetime": lambda props, byte_order, add_table_attrs: mat_to_datetime(props),
-    "duration": lambda props, byte_order, add_table_attrs: mat_to_duration(props),
-    "string": lambda props, byte_order, add_table_attrs: mat_to_string(
-        props, byte_order
-    ),
-    "table": lambda props, byte_order, add_table_attrs: mat_to_table(
-        props, add_table_attrs
-    ),
-    "timetable": lambda props, byte_order, add_table_attrs: mat_to_timetable(
-        props, add_table_attrs
-    ),
-    "containers.Map": lambda props, byte_order, add_table_attrs: {
+    "datetime": mat_to_datetime,
+    "duration": mat_to_duration,
+    "string": mat_to_string,
+    "table": mat_to_table,
+    "timetable": mat_to_timetable,
+    "containers.Map": lambda props, **kwargs: {
         "_Class": "containers.Map",
         "_Props": mat_to_containermap(props),
     },
-    "categorical": lambda props, byte_order, add_table_attrs: mat_to_categorical(props),
-    "dictionary": lambda props, byte_order, add_table_attrs: mat_to_dictionary(props),
-    "calendarDuration": lambda props,
-    byte_order,
-    add_table_attrs: mat_to_calendarduration(props),
+    "categorical": mat_to_categorical,
+    "dictionary": mat_to_dictionary,
+    "calendarDuration": mat_to_calendarduration,
 }
 
 
@@ -51,15 +43,15 @@ def convert_to_object(
             "_Props": props,
         }
 
-    result = CLASS_TO_FUNCTION.get(
+    func = CLASS_TO_FUNCTION.get(
         class_name,
-        lambda props, byte_order, add_table_attrs: {
+        lambda props, **kwargs: {
             "_Class": class_name,
             "_Props": props,
-        },  # Default case
-    )(props, byte_order, add_table_attrs)
+        },
+    )
 
-    return result
+    return func(props, byte_order=byte_order, add_table_attrs=add_table_attrs)
 
 
 def mat_to_enum(values, value_names, class_name, shapes):

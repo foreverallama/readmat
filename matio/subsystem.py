@@ -248,9 +248,7 @@ class SubsystemReader:
 
         return arr
 
-    def parse_field_types(
-        self, field_type, field_value, field_idx, type1_id, class_name
-    ):
+    def parse_field_types(self, field_type, field_value, type1_id, class_name):
         """Parses field types and values for an object"""
 
         if field_type == 0:
@@ -262,8 +260,6 @@ class SubsystemReader:
             else:
                 val = self.find_object_reference(self.fwrap_vals[field_value])
         elif field_type == 2:
-            if field_value < 0 or field_value > 1:
-                print("Field Value Found!", field_idx, field_type, field_value)
             val = field_value
         else:
             raise ValueError(f"Unknown field type: {field_type}")
@@ -297,9 +293,10 @@ class SubsystemReader:
         field_ids = self.get_ids(obj_type_id, byte_offset, nbytes=12)
         for field_idx, field_type, field_value in field_ids:
             obj_props[self.mcos_names[field_idx - 1]] = self.parse_field_types(
-                field_type, field_value, field_idx, type1_id, class_name
+                field_type, field_value, type1_id, class_name
             )
-            # Sending type1_id to parse_field for special case of nested function handle
+            # Sending type1_id and class_name to parse_field
+            # for special case of function_handle_object
 
         # Include Handle Values
         handles = self.extract_handles(dep_id)

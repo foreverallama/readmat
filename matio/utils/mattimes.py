@@ -29,7 +29,7 @@ def get_tz_offset(tz):
     return offset
 
 
-def mat_to_datetime(props):
+def mat_to_datetime(props, **_kwargs):
     """Convert MATLAB datetime to Python datetime
     Datetime returned as numpy.datetime64[ms]
 
@@ -53,7 +53,7 @@ def mat_to_datetime(props):
     return millis.astype("datetime64[ms]")
 
 
-def mat_to_duration(props):
+def mat_to_duration(props, **_kwargs):
     """Convert MATLAB duration to Python timedelta
     Duration returned as numpy.timedelta64
 
@@ -93,7 +93,7 @@ def mat_to_duration(props):
     return dur
 
 
-def mat_to_calendarduration(props):
+def mat_to_calendarduration(props, **_kwargs):
     """Convert MATLAB calendarDuration to Python timedelta
     CalendarDuration returned as numpy.timedelta64
 

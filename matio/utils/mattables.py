@@ -82,7 +82,7 @@ def to_dataframe(data, nvars, varnames):
     return df
 
 
-def mat_to_table(props, add_table_attrs=False):
+def mat_to_table(props, add_table_attrs=False, **_kwargs):
     """Converts MATLAB table to pandas DataFrame"""
 
     ver = int(props[0, 0]["props"][0, 0]["versionSavedFrom"].item())
@@ -144,7 +144,7 @@ def get_row_times(row_times, num_rows):
     return (start + step * np.arange(num_rows)).ravel()
 
 
-def mat_to_timetable(props, add_table_attrs=False):
+def mat_to_timetable(props, add_table_attrs=False, **_kwargs):
     """Converts MATLAB timetable to pandas DataFrame"""
 
     ver = int(props[0, 0]["any"][0, 0]["versionSavedFrom"].item())
@@ -174,7 +174,7 @@ def mat_to_timetable(props, add_table_attrs=False):
     return df
 
 
-def mat_to_categorical(props):
+def mat_to_categorical(props, **_kwargs):
     """Converts MATLAB categorical to pandas Categorical
     MATLAB categorical objects are stored with the following properties:
     1. categoryNames - all unique categories
