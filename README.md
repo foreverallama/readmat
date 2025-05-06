@@ -2,7 +2,7 @@
 
 The `mat-io` module provides tools for reading `.mat` files, particularly for extracting contents from user-defined objects or MATLAB datatypes such as `datetime`, `table` and `string`. It uses a wrapper built around `scipy.io` to extract raw subsystem data from MAT-files, which is then parsed and interpreted to extract object data.
 
-`mat-io` can read almost all types of objects from MAT-files, including user-defined objects. Additionally, it includes utilities to convert the following MATLAB datatypes into their respective _Pythonic_ objects:
+`mat-io` can read almost all types of objects from MAT-files (version `-v7`), including user-defined objects. Additionally, it includes utilities to convert the following MATLAB datatypes into their respective _Pythonic_ objects:
 
 - `string`
 - `datetime`, `duration` and `calendarDuration`
@@ -67,7 +67,7 @@ print(data)
 MATLAB objects are returned as a dictionary with the following fields:
 
 - `_Class`: The class name
-- `_Props`: A structured `numpy.ndarray` containing the property names and their contents. Dimensions are determined by the object dimensions.
+- `_Props`: A `numpy.ndarray` of dictionaries containing the property names and their contents. Dimensions are determined by the object dimensions.
 
 If the `raw_data` parameter is set to `False`, then `load_from_mat` converts these objects into a corresponding Pythonic datatype. This conversion is [detailed here](https://github.com/foreverallama/matio/tree/main/docs).
 
@@ -75,7 +75,7 @@ If the `raw_data` parameter is set to `False`, then `load_from_mat` converts the
 
 There's still lots to do! I could use your help in the following:
 
-- Reverse engineer the MAT-file structure to include support for more objects like `categorical`, `calendarDuration` and others
+- Reading function handles
 - Write object data into MAT-files
 - Write tests
 - Algorithmic optimization to integrate within the `scipy.io` framework
