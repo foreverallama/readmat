@@ -1,6 +1,7 @@
 """Base class for MAT-file reading and writing"""
 
-from matio.matio5 import MatRead5
+from matio.matio5 import read_matfile5
+from matio.matio7 import read_matfile7
 
 
 def get_matfile_version(byte_data):
@@ -51,15 +52,15 @@ def load_from_mat(
         v_major, v_minor = get_matfile_version(version_bytes)
 
     if v_major == 1:
-        mat_reader = MatRead5(file_path)
-    # elif v_major == 2:
-    # MR = MatRead7(file_path);
+        matfile_dict = read_matfile5(
+            file_path, raw_data, add_table_attrs, spmatrix, **kwargs
+        )
+    elif v_major == 2:
+        matfile_dict = read_matfile7(
+            file_path, raw_data, add_table_attrs, spmatrix, **kwargs
+        )
     else:
         raise NotImplementedError(f"Unknown MAT-file version {v_major}.{v_minor}")
-
-    matfile_dict = mat_reader.read_matfile(
-        raw_data, add_table_attrs, spmatrix, **kwargs
-    )
 
     # Update mdict if present
     if mdict is not None:
