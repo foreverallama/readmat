@@ -111,6 +111,14 @@ def read_matfile5(
         1. matfile_dict (dict): Dictionary of loaded variables
     """
 
+    if variable_names is not None:
+        if isinstance(variable_names, str):
+            variable_names = [variable_names, "__function_workspace__"]
+        elif not isinstance(variable_names, list):
+            raise TypeError("variable_names must be a string or a list of strings")
+        else:
+            variable_names.append("__function_workspace__")
+
     matfile_dict = loadmat(
         file_path,
         spmatrix=spmatrix,
