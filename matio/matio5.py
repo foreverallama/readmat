@@ -133,8 +133,7 @@ def read_matfile5(
         # No subsystem data in file
         return matfile_dict
 
-    if byte_order is None:
-        byte_order = "<" if ssdata[0, 2] == b"I"[0] else ">"
+    byte_order = "<" if ssdata[0, 2] == b"I"[0] else ">"
 
     ss_array = read_subsystem(
         ssdata,
