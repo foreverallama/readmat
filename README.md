@@ -1,8 +1,8 @@
 # Mat-IO Module
 
-The `mat-io` module provides tools for reading `.mat` files, particularly for extracting contents from user-defined objects or MATLAB datatypes such as `datetime`, `table` and `string`. It uses a wrapper built around `scipy.io` to extract raw subsystem data from MAT-files, which is then parsed and interpreted to extract object data.
+The `mat-io` module provides tools for reading `.mat` files, particularly for extracting contents from user-defined objects or MATLAB datatypes such as `datetime`, `table` and `string`. It uses a wrapper built around `scipy.io` to extract raw subsystem data from MAT-files, which is then parsed and interpreted to extract object data. MAT-file versions `v7` to `v7.3` are supported.
 
-`mat-io` can read almost all types of objects from MAT-files (version `-v7`), including user-defined objects. Additionally, it includes utilities to convert the following MATLAB datatypes into their respective _Pythonic_ objects:
+`mat-io` can read almost all types of objects from MAT-files, including user-defined objects. Additionally, it includes utilities to convert the following MATLAB datatypes into their respective _Pythonic_ objects:
 
 - `string`
 - `datetime`, `duration` and `calendarDuration`
@@ -52,15 +52,14 @@ print(data)
   Whether to read MATLAB sparse matrices as SciPy sparse matrix `coo_matrix`.
 
 - **`**kwargs`**:
-  Additional keyword arguments passed to [`scipy.io.loadmat`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.io.loadmat.html).
-  These include:
+  Additional keyword arguments passed to [`scipy.io.loadmat`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.io.loadmat.html). Only the following arguments are supported:
   - `byte_order`
   - `mat_dtype`
   - `chars_as_strings`
-  - `matlab_compatible`
   - `verify_compressed_data_integrity`
   - `variable_names`
-  - `uint16_codec`
+
+Amongst these, only `variable_names` is used for `v7.3` MAT-files.
 
 ### MATLAB objects
 
