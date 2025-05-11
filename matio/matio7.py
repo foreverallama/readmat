@@ -12,7 +12,14 @@ class MatRead7:
     """Reads MAT-file version 7.3 (HDF5) files."""
 
     def __init__(self, file_stream, raw_data=False, add_table_attrs=False, chars_as_strings=True):
-        """Initializes the MatRead7 object with the given file path."""
+        """Initializes the MAT-file reader.
+        Parameters
+        ----------
+            file_stream : h5py.File object
+            raw_data : bool, optional
+            add_table_attrs : bool, optional
+            chars_as_strings : bool, optional
+        """
         self.h5stream = file_stream
         self.raw_data = raw_data
         self.add_table_attrs = add_table_attrs
@@ -40,11 +47,10 @@ class MatRead7:
         return decoded_arr
 
     def is_struct_matrix(self, hdf5_group):
-        """
-        Get struct array shape
-        Scalar structs are stored directly as members of a group (can be nested)
-        Struct arrays are stored as datasets of HDF5 references
-        """
+        """Check if the HDF5 struct group is a struct matrix or scalar"""
+
+        # Scalar structs are stored directly as members of a group (can be nested)
+        # Struct arrays are stored as datasets of HDF5 references
         for key in hdf5_group:
             obj = hdf5_group[key]
             if isinstance(obj, h5py.Group):
@@ -103,7 +109,7 @@ class MatRead7:
 
     def read_h5_data(self, obj):
         """Reads data from the HDF5 object."""
-        #* Remaining: Sparse, Object, Function, Opaque
+
         matlab_class = obj.attrs.get("MATLAB_class", None)
         is_empty = obj.attrs.get("MATLAB_empty", 0)
 
@@ -122,11 +128,10 @@ class MatRead7:
             else:
                 arr = obj[()].T
 
+        #* Remaining: Sparse, Object, Function, Opaque
         return arr
 
-    def get_variables(self,
-                    variable_names=None
-                    ):
+    def get_variables(self, variable_names):
         """Reads variables from the HDF5 file."""
         if isinstance(variable_names, str):
             variable_names = [variable_names]
@@ -178,7 +183,21 @@ def read_matfile7(file_path,
                     chars_as_strings=True,
                     _verify_compressed_data_integrity=True,
                     variable_names=None):
-    """Reads MAT-file version 7.3 (HDF5) files."""
+    """Reads MAT-file version 7.3 (HDF5) files.
+    Parameters
+    ----------
+        file_path : str
+            Path to the MAT-file.
+        raw_data : bool, optional
+            If True, returns raw data for MATLAB object instances. Default is False.
+        add_table_attrs : bool, optional
+            If True, adds table attributes to Pandas DataFrames. Default is False.
+        spmatrix : bool, optional
+            If True, converts sparse matrices to COO format. Default is True.
+        chars_as_strings : bool, optional
+            If True, converts character arrays to strings. Default is True.
+        variable_names : list of str or str, optional
+            Names of variables to read from the MAT-file. Default is None (reads all variables)."""
 
     matfile_dict = read_file_header(file_path)
     f = h5py.File(file_path, "r")
