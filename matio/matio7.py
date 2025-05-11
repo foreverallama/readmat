@@ -2,8 +2,8 @@
 
 import h5py
 import numpy as np
-from scipy.io.matlab._mio_utils import (
-    chars_to_strings,  # pylint: disable=no-name-in-module
+from scipy.io.matlab._mio_utils import (  # pylint: disable=no-name-in-module
+    chars_to_strings,
 )
 from scipy.sparse import coo_matrix, issparse
 
@@ -11,11 +11,14 @@ from scipy.sparse import coo_matrix, issparse
 class MatRead7:
     """Reads MAT-file version 7.3 (HDF5) files."""
 
-    def __init__(self, file_stream):
+    def __init__(self, file_stream, raw_data=False, add_table_attrs=False, chars_as_strings=True):
         """Initializes the MatRead7 object with the given file path."""
         self.h5stream = file_stream
+        self.raw_data = raw_data
+        self.add_table_attrs = add_table_attrs
+        self.chars_as_strings = chars_as_strings
 
-    def read_char(self, obj, chars_as_strings, is_empty=0):
+    def read_char(self, obj, is_empty=0):
         """Decodes MATLAB char arrays from the v7.3 MAT-file."""
 
         decode_type = obj.attrs.get("MATLAB_int_decode", None)
@@ -32,9 +35,28 @@ class MatRead7:
             )
 
         decoded_arr = np.array(list(raw.tobytes().decode(codec))).reshape(raw.shape)
-        if chars_as_strings:
+        if self.chars_as_strings:
             return chars_to_strings(decoded_arr)
         return decoded_arr
+
+    def is_struct_matrix(self, hdf5_group):
+        """
+        Get struct array shape
+        Scalar structs are stored directly as members of a group (can be nested)
+        Struct arrays are stored as datasets of HDF5 references
+        """
+        for key in hdf5_group:
+            obj = hdf5_group[key]
+            if isinstance(obj, h5py.Group):
+                return False
+            if isinstance(obj, h5py.Dataset):
+                class_name = obj.attrs.get("MATLAB_class", None)
+                if class_name is not None:
+                    return False
+            else:
+                # Any unexpected case?
+                raise ValueError(f"Unexpected object type: {type(obj)}")
+        return True
 
     def read_struct(self, obj, is_empty=0):
         """Reads MATLAB struct arrays from the v7.3 MAT-file."""
@@ -44,17 +66,16 @@ class MatRead7:
             return np.array([None], dtype=object).reshape(obj[()])
 
         fields = list(obj.keys())
+        field_order = obj.attrs.get("MATLAB_fields", None)
+        if field_order is not None:
+            fields = [''.join(x.astype(str)) for x in field_order]
 
-        # Get struct array shape
-        # Scalar structs are stored directly as members of a group (can be nested)
-        # Struct arrays are stored as datasets of HDF5 references
-        shape = (1, 1)
-        is_scalar = True
-        field = next(iter(obj))
-        obj_field = obj[field]
-        if isinstance(obj_field, h5py.Dataset) and obj_field.dtype == object:
-            shape = obj_field.shape
+        if self.is_struct_matrix(obj):
             is_scalar = False
+            shape = next(iter(obj.values())).shape
+        else:
+            is_scalar = True
+            shape = (1, 1)
 
         dt = [(name, object) for name in fields]
         arr = np.empty(shape=shape, dtype=dt)
@@ -80,19 +101,22 @@ class MatRead7:
             arr[idx] = self.read_h5_data(ref_data)
         return arr.T
 
-    def read_h5_data(self, obj, chars_as_strings=True):
+    def read_h5_data(self, obj):
         """Reads data from the HDF5 object."""
         #* Remaining: Sparse, Object, Function, Opaque
         matlab_class = obj.attrs.get("MATLAB_class", None)
         is_empty = obj.attrs.get("MATLAB_empty", 0)
 
         if matlab_class == b"char":
-            arr = self.read_char(obj, chars_as_strings, is_empty)
+            arr = self.read_char(obj, is_empty)
+        elif matlab_class == b"logical":
+            arr = obj[()].T.astype(np.bool_)
         elif matlab_class == b"struct":
             arr = self.read_struct(obj, is_empty)
         elif matlab_class == b"cell":
             arr = self.read_cell(obj, is_empty)
         else:
+            #? int_decode attribute, is it useful?
             if is_empty:
                 arr = np.empty(shape=obj[()], dtype=obj[()].dtype)
             else:
@@ -101,10 +125,6 @@ class MatRead7:
         return arr
 
     def get_variables(self,
-                    raw_data=False,
-                    add_table_attrs=False,
-                    byte_order=None, # Needed for decoding strings
-                    chars_as_strings=True,
                     variable_names=None
                     ):
         """Reads variables from the HDF5 file."""
@@ -123,7 +143,7 @@ class MatRead7:
             if variable_names is not None and var not in variable_names:
                 continue
             try:
-                data = self.read_h5_data(obj, chars_as_strings)
+                data = self.read_h5_data(obj)
             except Exception as err:
                 raise ValueError(f"Error reading variable {var}: {err}") from err
             mdict[var] = data
@@ -149,14 +169,22 @@ def read_file_header(file_path):
         hdict['__version__'] = f"{v_major}.{v_minor}"
     return hdict
 
-def read_matfile7(file_path, raw_data=False, add_table_attrs=False, spmatrix=True, **kwargs):
+def read_matfile7(file_path,
+                  raw_data=False,
+                    add_table_attrs=False,
+                    spmatrix=True,
+                    _byte_order=None,
+                    _mat_dtype=False,
+                    chars_as_strings=True,
+                    _verify_compressed_data_integrity=True,
+                    variable_names=None):
     """Reads MAT-file version 7.3 (HDF5) files."""
 
     matfile_dict = read_file_header(file_path)
     f = h5py.File(file_path, "r")
-    mat_reader = MatRead7(f)
+    mat_reader = MatRead7(f, raw_data, add_table_attrs, chars_as_strings)
     try:
-        mdict = mat_reader.get_variables(raw_data, add_table_attrs, **kwargs)
+        mdict = mat_reader.get_variables(variable_names)
     finally:
         print('Closing file')
         f.close()
