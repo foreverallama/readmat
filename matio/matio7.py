@@ -7,6 +7,8 @@ from scipy.io.matlab._mio_utils import (  # pylint: disable=no-name-in-module
 )
 from scipy.sparse import coo_matrix, issparse
 
+from matio.subsystem import SubsystemReader
+
 
 class MatRead7:
     """Reads MAT-file version 7.3 (HDF5) files."""
@@ -21,9 +23,18 @@ class MatRead7:
             chars_as_strings : bool, optional
         """
         self.h5stream = file_stream
+        self.subsystem = None
         self.raw_data = raw_data
         self.add_table_attrs = add_table_attrs
         self.chars_as_strings = chars_as_strings
+
+    def initialize_v73_subsystem(self, byte_order, raw_data, add_table_attrs):
+        """Initializes the subsystem for v7.3 MAT-files."""
+
+        subsystem_arr = self.read_struct(self.h5stream["#subsystem#"])
+        subsystem = SubsystemReader(byte_order, raw_data, add_table_attrs)
+        subsystem.init_fields_v73(subsystem_arr)
+        return subsystem
 
     def read_char(self, obj, is_empty=0):
         """Decodes MATLAB char arrays from the v7.3 MAT-file."""
@@ -37,6 +48,7 @@ class MatRead7:
         if decode_type == 2:
             codec = "utf-16"
         else:
+            #? Is MATLAB_int_decode useful here
             raise NotImplementedError(
                 f"MATLAB_int_decode {decode_type} not supported. Only 2 (utf-16) is supported."
             )
@@ -68,8 +80,7 @@ class MatRead7:
         """Reads MATLAB struct arrays from the v7.3 MAT-file."""
 
         if is_empty:
-            # scipy.io.loadmat compatible
-            return np.array([None], dtype=object).reshape(obj[()])
+            return np.empty(shape=obj[()], dtype=object)
 
         fields = list(obj.keys())
         field_order = obj.attrs.get("MATLAB_fields", None)
@@ -107,11 +118,34 @@ class MatRead7:
             arr[idx] = self.read_h5_data(ref_data)
         return arr.T
 
+    def read_opaque(self, obj, object_decode, is_empty=0):
+        """Reads MATLAB opaque objects from the v7.3 MAT-file."""
+
+        if is_empty:
+            return np.empty(shape=obj[()], dtype=object)
+
+        class_name = obj.attrs.get("MATLAB_class", None)
+        if class_name == b"FileWrapper__":
+            return self.read_cell(obj)
+
+        if self.subsystem is None:
+            raise ValueError("Subsystem not initialized. Cannot read opaque objects.")
+
+        if object_decode == 3:
+            type_system = "MCOS"
+        else:
+            type_system = ""
+
+        #* Handle Enumeration Instances here
+        metadata = obj[()].T
+        return self.subsystem.read_mcos_object(metadata, type_system)
+
     def read_h5_data(self, obj):
         """Reads data from the HDF5 object."""
 
         matlab_class = obj.attrs.get("MATLAB_class", None)
         is_empty = obj.attrs.get("MATLAB_empty", 0)
+        object_decode = obj.attrs.get("MATLAB_object_decode", 0)
 
         if matlab_class == b"char":
             arr = self.read_char(obj, is_empty)
@@ -121,6 +155,10 @@ class MatRead7:
             arr = self.read_struct(obj, is_empty)
         elif matlab_class == b"cell":
             arr = self.read_cell(obj, is_empty)
+        elif object_decode:
+            arr = self.read_opaque(obj, object_decode, is_empty)
+        elif matlab_class == b"canonical empty" and is_empty:
+            arr = np.empty(shape=(0, 0), dtype=object)
         else:
             #? int_decode attribute, is it useful?
             if is_empty:
@@ -128,10 +166,10 @@ class MatRead7:
             else:
                 arr = obj[()].T
 
-        #* Remaining: Sparse, Object, Function, Opaque
+        #* Remaining: Sparse, Object, Function
         return arr
 
-    def get_variables(self, variable_names):
+    def get_variables(self, variable_names, byte_order, raw_data, add_table_attrs):
         """Reads variables from the HDF5 file."""
         if isinstance(variable_names, str):
             variable_names = [variable_names]
@@ -140,6 +178,9 @@ class MatRead7:
 
         mdict = {}
         mdict['__globals__'] = []
+
+        if '#subsystem#' in self.h5stream:
+            self.subsystem = self.initialize_v73_subsystem(byte_order, raw_data, add_table_attrs)
 
         for var in self.h5stream:
             obj = self.h5stream[var]
@@ -168,21 +209,22 @@ def read_file_header(file_path):
         hdr = f.read(128)
         v_major = hdr[125] if hdr[126] == b'I'[0] else hdr[124]
         v_minor = hdr[124] if hdr[126] == b'I'[0] else hdr[125]
+        byte_order = "<" if hdr[126] == b'I'[0] else ">"
 
         hdict = {}
         hdict['__header__'] = hdr[0:116].decode('utf-8').strip(' \t\n\000')
         hdict['__version__'] = f"{v_major}.{v_minor}"
-    return hdict
+    return hdict, byte_order
 
 def read_matfile7(file_path,
                   raw_data=False,
-                    add_table_attrs=False,
-                    spmatrix=True,
-                    _byte_order=None,
-                    _mat_dtype=False,
-                    chars_as_strings=True,
-                    _verify_compressed_data_integrity=True,
-                    variable_names=None):
+                  add_table_attrs=False,
+                  spmatrix=True,
+                  byte_order=None, # pylint: disable=unused-argument
+                  mat_dtype=False, # pylint: disable=unused-argument
+                  chars_as_strings=True,
+                  verify_compressed_data_integrity=True, # pylint: disable=unused-argument
+                  variable_names=None):
     """Reads MAT-file version 7.3 (HDF5) files.
     Parameters
     ----------
@@ -199,13 +241,12 @@ def read_matfile7(file_path,
         variable_names : list of str or str, optional
             Names of variables to read from the MAT-file. Default is None (reads all variables)."""
 
-    matfile_dict = read_file_header(file_path)
+    matfile_dict, byte_order = read_file_header(file_path)
     f = h5py.File(file_path, "r")
     mat_reader = MatRead7(f, raw_data, add_table_attrs, chars_as_strings)
     try:
-        mdict = mat_reader.get_variables(variable_names)
+        mdict = mat_reader.get_variables(variable_names, byte_order, raw_data, add_table_attrs)
     finally:
-        print('Closing file')
         f.close()
 
     if spmatrix:

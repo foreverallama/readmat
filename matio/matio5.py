@@ -104,7 +104,6 @@ def read_matfile5(
         4. byte_order (str): Endianness
         5. mat_dtype (bool): Whether to load MATLAB data types
         6. chars_as_strings (bool): Whether to load character arrays as strings
-        7. matlab_compatible (bool): Whether to load MATLAB compatible data types
         8. verify_compressed_data_integrity (bool): Whether to verify compressed data integrity
         9. variable_names (list): List of variable names to load
     Returns:
@@ -141,7 +140,8 @@ def read_matfile5(
         mat_dtype,
         verify_compressed_data_integrity,
     )
-    subsystem = SubsystemReader(ss_array, byte_order, raw_data, add_table_attrs)
+    subsystem = SubsystemReader(byte_order, raw_data, add_table_attrs)
+    subsystem.init_fields_v7(ss_array)
 
     for var, data in matfile_dict.items():
         if not isinstance(data, np.ndarray):
