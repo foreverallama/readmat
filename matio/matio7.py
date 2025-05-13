@@ -136,8 +136,19 @@ class MatRead7:
         else:
             type_system = ""
 
-        #* Handle Enumeration Instances here
-        metadata = obj[()].T
+        # Check Enumeration Instances
+        fields = obj.attrs.get("MATLAB_fields", None)
+        if fields is not None:
+            fields = [''.join(x.astype(str)) for x in fields]
+
+            if "EnumerationInstanceTag" in fields:
+                metadata = self.read_struct(obj)
+                if metadata[0, 0]["EnumerationInstanceTag"] != 0xDD000000:
+                    return metadata
+            else:
+                metadata = obj[()].T
+        else:
+            metadata = obj[()].T
         return self.subsystem.read_mcos_object(metadata, type_system)
 
     def read_h5_data(self, obj):
