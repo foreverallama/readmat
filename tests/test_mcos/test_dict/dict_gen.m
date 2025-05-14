@@ -5,7 +5,5 @@ dict3 = dictionary(["name", "age"], {"Alice", 25});
 dict4 = dictionary({1, 2, 3}, ["one", "two", "three"]);
 
 % Save all
-save('dict1.mat', 'dict1');
-save('dict2.mat', 'dict2');
-save('dict3.mat', 'dict3');
-save("dict4.mat", "dict4");
+save('test_dict_v7.mat', '-v7');
+save('test_dict_v73.mat', '-v7.3');

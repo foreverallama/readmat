@@ -5,8 +5,5 @@ dt3 = reshape(dt3, 2, 3);
 dt4 = datetime.empty;
 dt5 = datetime(2025,4,1,12,00,00, 'Format', 'yyyy-MM-dd HH:mm:ss');
 
-save('dt_base.mat','dt1','-v7');
-save('dt_tz.mat','dt2','-v7');
-save('dt_array.mat','dt3','-v7');
-save('dt_empty.mat','dt4','-v7');
-save('dt_fmt.mat','dt5','-v7');
+save('test_datetime_v7.mat', 'dt1', 'dt2', 'dt3', 'dt4', 'dt5', '-v7');
+save('test_datetime_v73.mat', 'dt1', 'dt2', 'dt3', 'dt4', 'dt5', '-v7.3');

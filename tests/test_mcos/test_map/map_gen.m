@@ -20,7 +20,5 @@ map4 = containers.Map(keys, vals);
 
 %% Save
 
-save('map1.mat','map1');
-save('map2.mat','map2');
-save('map3.mat','map3');
-save('map4.mat','map4');
+save('test_map_v7.mat', 'map1', 'map2', 'map3', 'map4', '-v7');
+save('test_map_v73.mat', 'map1', 'map2', 'map3', 'map4', '-v7.3');

@@ -32,13 +32,5 @@ cat10 = categorical(repmat(["yes", "no", "maybe"], [2, 1, 2]));
 
 %% Saving
 
-save('cat1.mat', 'cat1');
-save('cat2.mat', 'cat2');
-save('cat3.mat', 'cat3');
-save('cat4.mat', 'cat4');
-save('cat5.mat', 'cat5');
-save('cat6.mat', 'cat6');
-save('cat7.mat', 'cat7');
-save('cat8.mat', 'cat8');
-save('cat9.mat', 'cat9');
-save('cat10.mat', 'cat10');
+save('test_categorical_v7.mat', '-v7');
+save('test_categorical_v73.mat', '-v7.3');

@@ -12,7 +12,7 @@ class SubsystemReader:
     Currently only supports MCOS objects
     """
 
-    def __init__(self, ssdata, byte_order, raw_data=False, add_table_attrs=False):
+    def __init__(self, byte_order, raw_data=False, add_table_attrs=False):
         self.byte_order = (
             "<u4" if byte_order == "<" else ">u4"
         )  # Could potentially be int32
@@ -22,9 +22,8 @@ class SubsystemReader:
         self.fwrap_vals = None
         self.fwrap_defaults = None
         self.mcos_names = None
-        self.init_fields(ssdata)
 
-    def init_fields(self, ssdata):
+    def init_fields_v7(self, ssdata):
         """Fetches metadata and field contents from the subsystem data
         Currently only supports MCOS objects
         Attributes:
@@ -49,6 +48,28 @@ class SubsystemReader:
 
             self.fwrap_vals = fwrap_data[2:-3, 0]
             self.fwrap_defaults = fwrap_data[-3:, 0]
+            self.mcos_names = self.get_field_names(fwrap_version_offsets)
+
+    def init_fields_v73(self, ssdata):
+        """Fetches metadata and field contents from the subsystem data
+        Different format from aove due to scipy.io.loadmat compatibility
+        """
+
+        if "MCOS" in ssdata.dtype.names:
+            self.fwrap_metadata = ssdata[0, 0]["MCOS"][0,0]
+            toc_flag = np.frombuffer(
+                self.fwrap_metadata, dtype=self.byte_order, count=1, offset=0
+            )[0]
+            if toc_flag in (2, 3):
+                # Not sure
+                fwrap_version_offsets = 6
+            elif toc_flag == 4:
+                fwrap_version_offsets = 8
+            else:
+                raise ValueError("Incompatible FileWrapper version")
+
+            self.fwrap_vals = ssdata[0, 0]["MCOS"][2:-3,0]
+            self.fwrap_defaults = ssdata[0, 0]["MCOS"][-3:,0]
             self.mcos_names = self.get_field_names(fwrap_version_offsets)
 
     def get_field_names(self, num_offsets):

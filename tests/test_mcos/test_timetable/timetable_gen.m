@@ -39,13 +39,5 @@ tt10 = timetable(data1, 'TimeStep', calm, 'StartTime', datetime(2020,1,1));
 
 %% Save
 
-save('tt1.mat','tt1');
-save('tt2.mat','tt2');
-save('tt3.mat','tt3');
-save('tt4.mat','tt4');
-save('tt5.mat','tt5');
-save('tt6.mat','tt6');
-save('tt7.mat','tt7');
-save('tt8.mat','tt8');
-save('tt9.mat','tt9');
-save('tt10.mat', 'tt10');
+save('test_timetable_v7.mat', 'tt1', 'tt2', 'tt3', 'tt4', 'tt5', 'tt6', 'tt7', 'tt8', 'tt9', 'tt10', '-v7');
+save('test_timetable_v73.mat', 'tt1', 'tt2', 'tt3', 'tt4', 'tt5', 'tt6', 'tt7', 'tt8', 'tt9', 'tt10', '-v7.3');

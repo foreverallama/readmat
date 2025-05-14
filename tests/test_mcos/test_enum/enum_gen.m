@@ -7,7 +7,5 @@ e2 = EnumClass.enum2;
 e3 = EnumClass.enum3;
 obj1 = NestedClass(e1, e2, e3);
 
-save('enum_base.mat','enum_base','-v7');
-save('enum_array.mat','enum_arr','-v7');
-save('enum_inside_obj.mat','obj1','-v7');
-save('enum_uint32.mat','enum_uint32','-v7');
+save('test_enum_v7.mat', 'enum_base', 'enum_arr', 'obj1', 'enum_uint32', '-v7');
+save('test_enum_v73.mat', 'enum_base', 'enum_arr', 'obj1', 'enum_uint32', '-v7.3');
