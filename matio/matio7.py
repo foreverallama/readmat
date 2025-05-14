@@ -1,11 +1,14 @@
 """MATLAB MAT-file version 7.3 (HDF5) reader."""
 
+import warnings
+
 import h5py
 import numpy as np
+from scipy.io.matlab._mio5_params import MatlabObject
 from scipy.io.matlab._mio_utils import (  # pylint: disable=no-name-in-module
     chars_to_strings,
 )
-from scipy.sparse import coo_matrix, issparse
+from scipy.sparse import coo_matrix, csc_array, issparse
 
 from matio.subsystem import SubsystemReader
 
@@ -36,6 +39,30 @@ class MatRead7:
         subsystem.init_fields_v73(subsystem_arr)
         return subsystem
 
+    def read_int(self, obj, is_empty=0):
+        """Reads MATLAB integer arrays from the v7.3 MAT-file."""
+
+        int_decode = obj.attrs.get("MATLAB_int_decode", None)
+        if int_decode is not None:
+            warnings.warn(
+                f"MATLAB_int_decode {int_decode} is not supported. "
+                "This may lead to unexpected behaviour.", UserWarning
+            )
+
+        if is_empty:
+            return np.empty(shape=obj[()], dtype=obj[()].dtype)
+
+        arr = obj[()]
+        if arr.dtype.names:
+            # complex number
+            real = arr["real"]
+            imag = arr["imag"]
+            arr = np.empty(shape=arr.shape, dtype=np.complex128)
+            arr.real = real
+            arr.imag = imag
+
+        return arr.T
+
     def read_char(self, obj, is_empty=0):
         """Decodes MATLAB char arrays from the v7.3 MAT-file."""
 
@@ -48,10 +75,12 @@ class MatRead7:
         if decode_type == 2:
             codec = "utf-16"
         else:
-            #? Is MATLAB_int_decode useful here
-            raise NotImplementedError(
-                f"MATLAB_int_decode {decode_type} not supported. Only 2 (utf-16) is supported."
+            warnings.warn(
+                f"MATLAB_int_decode {decode_type} not supported. "
+                "This may lead to unexpected behaviour",
+                UserWarning
             )
+            codec = "utf-8"
 
         decoded_arr = np.array(list(raw.tobytes().decode(codec))).reshape(raw.shape)
         if self.chars_as_strings:
@@ -67,13 +96,12 @@ class MatRead7:
             obj = hdf5_group[key]
             if isinstance(obj, h5py.Group):
                 return False
+
             if isinstance(obj, h5py.Dataset):
                 class_name = obj.attrs.get("MATLAB_class", None)
                 if class_name is not None:
                     return False
-            else:
-                # Any unexpected case?
-                raise ValueError(f"Unexpected object type: {type(obj)}")
+
         return True
 
     def read_struct(self, obj, is_empty=0):
@@ -85,6 +113,7 @@ class MatRead7:
         fields = list(obj.keys())
         field_order = obj.attrs.get("MATLAB_fields", None)
         if field_order is not None:
+            # For maximum compatibility with scipy.io
             fields = [''.join(x.astype(str)) for x in field_order]
 
         if self.is_struct_matrix(obj):
@@ -118,23 +147,78 @@ class MatRead7:
             arr[idx] = self.read_h5_data(ref_data)
         return arr.T
 
+    def read_sparse(self, obj, nrows):
+        """Reads MATLAB sparse arrays from the v7.3 MAT-file."""
+
+        jc = obj['jc'][()]
+        ncols = jc.size - 1
+
+        if 'data' in obj:
+            # Exists only if sparse matrix contains non-zero elements
+            data = self.read_int(obj['data'])
+            ir = obj['ir'][()]
+        else:
+            data = np.array([], dtype=np.float64)
+            ir = np.array([], dtype=np.int32)
+
+        return csc_array((data, ir, jc), shape=(nrows, ncols))
+
+    def read_function_handle(self, obj, object_decode):
+        """Reads MATLAB function handles from the v7.3 MAT-file."""
+
+        # Uses object_decode = 1 probably
+
+        if object_decode == 1:
+            return self.read_struct(obj)
+
+        raise NotImplementedError(
+            f"Function handle object_decode {object_decode} not supported. Only 1 is supported."
+        )
+
+    def read_object(self, obj, class_name):
+        """Reads mxOBJECT_CLASS variables from the v7.3 MAT-file."""
+
+        class_name = class_name.decode("utf-8")
+        fields = self.read_struct(obj)
+
+        return MatlabObject(fields, class_name)
+
+    def get_type_system(self, class_name):
+        """Gets the type system for the given class name."""
+
+        # Possibly, MATLAB decodes internally based on class name
+        # This function is just guess work as of now
+        class_name = class_name.decode("utf-8")
+        if class_name.startswith("java.") or class_name.startswith("com."):
+            type_system = "java"
+        elif class_name.startswith("COM."):
+            type_system = "handle"
+        else:
+            type_system = "MCOS"
+
+        return type_system
+
     def read_opaque(self, obj, object_decode, is_empty=0):
         """Reads MATLAB opaque objects from the v7.3 MAT-file."""
-
-        if is_empty:
-            return np.empty(shape=obj[()], dtype=object)
 
         class_name = obj.attrs.get("MATLAB_class", None)
         if class_name == b"FileWrapper__":
             return self.read_cell(obj)
 
+        if object_decode == 2:
+            # object_decode is a flag indicating how to decode objects
+            # Object Decode = 1 -> Function Handle (possibly)
+            # Object Decode = 2 -> mxOBJECT_CLASS
+            # Object Decode = 3 -> mxOPAQUE_CLASS
+            return self.read_object(obj, class_name)
+
+        if is_empty:
+            return np.empty(shape=obj[()], dtype=object)
+
         if self.subsystem is None:
             raise ValueError("Subsystem not initialized. Cannot read opaque objects.")
 
-        if object_decode == 3:
-            type_system = "MCOS"
-        else:
-            type_system = ""
+        type_system = self.get_type_system(class_name)
 
         # Check Enumeration Instances
         fields = obj.attrs.get("MATLAB_fields", None)
@@ -156,28 +240,35 @@ class MatRead7:
 
         matlab_class = obj.attrs.get("MATLAB_class", None)
         is_empty = obj.attrs.get("MATLAB_empty", 0)
-        object_decode = obj.attrs.get("MATLAB_object_decode", 0)
+        object_decode = obj.attrs.get("MATLAB_object_decode", -1)
+        matlab_sparse = obj.attrs.get("MATLAB_sparse", -1)
 
-        if matlab_class == b"char":
+        if matlab_sparse >= 0:
+            arr = self.read_sparse(obj, matlab_sparse)
+        elif matlab_class == b"char":
             arr = self.read_char(obj, is_empty)
         elif matlab_class == b"logical":
             arr = obj[()].T.astype(np.bool_)
+        elif matlab_class in (
+            b"int8", b"uint8", b"int16", b"uint16",
+            b"int32", b"uint32", b"int64", b"uint64",
+            b"single", b"double"
+        ):
+            arr = self.read_int(obj, is_empty)
         elif matlab_class == b"struct":
             arr = self.read_struct(obj, is_empty)
         elif matlab_class == b"cell":
             arr = self.read_cell(obj, is_empty)
-        elif object_decode:
-            arr = self.read_opaque(obj, object_decode, is_empty)
+        elif matlab_class == b"function_handle":
+            arr = self.read_function_handle(obj, object_decode)
         elif matlab_class == b"canonical empty" and is_empty:
             arr = np.empty(shape=(0, 0), dtype=object)
+        elif object_decode >= 0:
+            arr = self.read_opaque(obj, object_decode, is_empty)
         else:
-            #? int_decode attribute, is it useful?
-            if is_empty:
-                arr = np.empty(shape=obj[()], dtype=obj[()].dtype)
-            else:
-                arr = obj[()].T
+            raise NotImplementedError(
+                f"MATLAB class {matlab_class} not supported", UserWarning)
 
-        #* Remaining: Sparse, Object, Function
         return arr
 
     def get_variables(self, variable_names, byte_order, raw_data, add_table_attrs):
