@@ -92,7 +92,7 @@ The data in this cell is stored as a `mxUINT8` data element. However, the actual
 - The start of this region is indicated by the first offset value
 - This region consists of blocks of **four** 32-bit integers in the format `(handle_class_name_index, class_name_index, 0, 0)`
 - The value `class_name_index` points to the class name in the list `names` obtained above
-- The value `handle_class_name_index` points to the handle class name in the list of `names` obtained above. For more information, see [handle classes](field_contents.md/#handle-classes)
+- The value `namespace_index` points to the namespace in the list of `names` obtained above. For more information, see [namespaces](https://in.mathworks.com/help/matlab/matlab_oop/namespaces.html)
 - The first block is always all zeros
 - The blocks are ordered by `classID`
 
@@ -120,7 +120,7 @@ This region stores field contents for classes using the `any` property.
 - Each sub-block is of the format `(field_name_index, field_type, field_value)`
   - The value `field_name_index` points to the field name in the list `names` obtained above
   - `field_type` indicates whether the field is a property or an attribute
-    - `field_type = 0` not sure what it indicates, but its used in some special objects
+    - `field_type = 0` indicates an enumeration (speculation)
     - `field_type = 1` indicates a property
     - `field_type = 2` indicates an attribute like `Hidden`, `Constant`, etc.
   - `field_value` depends on `field_type`
@@ -134,18 +134,18 @@ This region is structured exactly the same as _Region 2_, but is for Type 2 obje
 
 #### Region 5: Handle Class Metadata
 
-This region links objects to its corresponding handle superclass objects.
+This region links objects to any dynamic properties it contains (probably eventlisteners as well).
 
 - The start of this region is indicated by the fifth offset value
 - This region consists of blocks of 32-bit integers, in order of `dependency_id`
-- Each block is of the form `(num_handle_properties, handle_id_1, handle_id_2 ...., handle_id_N)`
-- Here, `handle_id` points to the `type2_id` of the handle object
+- Each block is of the form `(num_dynamic_properties, prop_id_1, prop_id_2 ...., prop_id_N)`
+- Here, `prop_id` points to the `type2_id` of the dynamic property
 - Each block is padded to 8 byte boundary
 - The first block is all zeros
 
 #### Other Regions
 
-The 6th and 7th offset values indicate other metadata regions whose purpose is unknown. These offsets are not present in earlier version of `FileWrapper__` metadata, and is probably related to the handling of certain special types of objects.
+The 6th and 7th offset values indicate other metadata regions whose purpose is unknown. These offsets are apparently not present/reserved in earlier version of `FileWrapper__` metadata, and is probably related to the handling of certain special types of objects.
 
 The last offset points to the end of this cell.
 

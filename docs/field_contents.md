@@ -165,11 +165,11 @@ Objects of this class contain the following properties:
 
 If the field contains an object, then the corresponding cell would contain a `uint32` column matrix structured exactly the same as the object metadata subelement of `mxOPAQUE_CLASS` in the normal part of the MAT-file. This metadata contains the `classID` and `objectID` of the object stored in its field. But how do you differentiate this from a regular `uint32` column matrix?
 
-The answer lies in the first value of the array - the object reference. MATLAB uses the value `0xDD000000` to internally identify arrays as object metadata. This means that if you assign a `6x1` array with the first value as `0xDD000000` to a property of an object, then MATLAB tries to recognize it as an object, fails and crashes! (There are some other checks like on `ndims` to make sure it is an object reference and not a column array)
+The answer lies in the first value of the array - the object reference. MATLAB uses the value `0xDD000000` to internally identify arrays as object metadata. This means that if you assign a `Nx1` array with the first value as `0xDD000000` to a property of an object, then MATLAB tries to instantiate an object, fails and crashes!
 
 ## The `any` Property
 
-Going through different datatypes, you'll notice multiple classes contianing a property called `any`. All classes using the `any` property are defined as `type 1` objects. Most likely, these classes inherit from the same base class which is a catch all property to contain arbitrary data. So far, the following classes have been observed to use the `any` property:
+All classes using the `any` property are defined as `type 1` objects. This type is probably used for storing property values in a different format compared to the actual properties of the object. So far, the following classes have been observed to use the `any` property:
 
 - `string`
 - `timetable`
