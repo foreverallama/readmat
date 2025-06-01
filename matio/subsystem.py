@@ -38,17 +38,16 @@ class SubsystemReader:
             toc_flag = np.frombuffer(
                 self.fwrap_metadata, dtype=self.byte_order, count=1, offset=0
             )[0]
-            if toc_flag in (2, 3):
-                # Not sure
-                fwrap_version_offsets = 6
-            elif toc_flag == 4:
-                fwrap_version_offsets = 8
-            else:
-                raise ValueError("Incompatible FileWrapper version")
+
+            if toc_flag != 4:
+                warnings.warn(
+                    f"FileWrapper version {toc_flag} detected, may result in unexpected behavior",
+                    UserWarning,
+                )
 
             self.fwrap_vals = fwrap_data[2:-3, 0]
             self.fwrap_defaults = fwrap_data[-3:, 0]
-            self.mcos_names = self.get_field_names(fwrap_version_offsets)
+            self.mcos_names = self.get_field_names()
 
     def init_fields_v73(self, ssdata):
         """Fetches metadata and field contents from the subsystem data
@@ -60,19 +59,18 @@ class SubsystemReader:
             toc_flag = np.frombuffer(
                 self.fwrap_metadata, dtype=self.byte_order, count=1, offset=0
             )[0]
-            if toc_flag in (2, 3):
-                # Not sure
-                fwrap_version_offsets = 6
-            elif toc_flag == 4:
-                fwrap_version_offsets = 8
-            else:
-                raise ValueError("Incompatible FileWrapper version")
+
+            if toc_flag != 4:
+                warnings.warn(
+                    f"FileWrapper version {toc_flag} detected, may result in unexpected behavior",
+                    UserWarning,
+                )
 
             self.fwrap_vals = ssdata[0, 0]["MCOS"][2:-3,0]
             self.fwrap_defaults = ssdata[0, 0]["MCOS"][-3:,0]
-            self.mcos_names = self.get_field_names(fwrap_version_offsets)
+            self.mcos_names = self.get_field_names()
 
-    def get_field_names(self, num_offsets):
+    def get_field_names(self):
         """Extracts field and class names from the subsystem data
         Names are stored as a list of null-terminated strings
         Inputs:
@@ -84,7 +82,7 @@ class SubsystemReader:
         byte_end = np.frombuffer(
             self.fwrap_metadata, dtype=self.byte_order, count=1, offset=8
         )[0]
-        byte_start = 8 + num_offsets * 4
+        byte_start = 8 + 8 * 4
         data = self.fwrap_metadata[byte_start:byte_end].tobytes()
         raw_strings = data.split(b"\x00")
         all_names = [s.decode("ascii") for s in raw_strings if s]
@@ -121,14 +119,14 @@ class SubsystemReader:
         """Extracts class name and handle for a given object from its class ID
         Class IDs are stored in blocks of 16 bytes ordered by class ID
         Each block contains:
-            1. Handle Name Index
+            1. Namespace Index
             2. Class Name Index
             3. Unknown flag
             4. Unknown flag
         Inputs:
             1. class_id: ID of the class
         Returns:
-            (handle_name, class_name)
+            (namespace, class_name)
         """
 
         byte_offset = np.frombuffer(
@@ -136,7 +134,7 @@ class SubsystemReader:
         )[0]
         byte_offset = byte_offset + class_id * 16
 
-        handle_idx, class_idx, _, _ = np.frombuffer(
+        namespace_idx, class_idx, _, _ = np.frombuffer(
             self.fwrap_metadata,
             dtype=self.byte_order,
             count=4,
@@ -144,8 +142,8 @@ class SubsystemReader:
         )
 
         class_name = self.mcos_names[class_idx - 1]
-        handle_name = self.mcos_names[handle_idx - 1] if handle_idx > 0 else None
-        return handle_name, class_name
+        namespace = self.mcos_names[namespace_idx - 1] if namespace_idx > 0 else None
+        return namespace, class_name
 
     def get_ids(self, m_id, byte_offset, nbytes):
         """Extract nblocks and subblock contents for a given object
@@ -186,14 +184,14 @@ class SubsystemReader:
 
         return ids.reshape((nblocks, nbytes // 4))
 
-    def get_handle_class_instance(self, type2_id):
-        """Reads handle class instance ID for a given object
-        Searches for the object ID of the corresponding handle class from its type 2 ID
+    def get_dynamic_prop_instance(self, type2_id):
+        """Reads dynamic property instance ID for a given object
+        Searches for the object ID of the corresponding dynamic property from its type 2 ID
         Inputs:
-            1. type2_id: ID of the handle instance
+            1. type2_id: ID of the dynamic property
         Returns:
-            1. class_id of the handle instance
-            2. object_id of the handle instance
+            1. class_id of the dynamic property
+            2. object_id of the dynamic property
         """
 
         start, end = np.frombuffer(
@@ -209,29 +207,29 @@ class SubsystemReader:
                 object_id = idx
                 return class_id, np.array([object_id])
 
-        raise ValueError(f"Handle class instance not found for type2_id: {type2_id}")
+        raise ValueError(f"Dynamic property instance not found for object ID (Type 2): {type2_id}")
 
-    def extract_handles(self, dep_id):
-        """Extracts the handle instances for an object
-        Handle instances attached to an object are tagged by their type 2 IDs
-        Objects with handle instances can be found by their dependency ID
+    def extract_dynamic_props(self, dep_id):
+        """Extracts the dynamic properties for an object
+        Dynamic properties attached to an object are tagged by their type 2 IDs
+        Objects with dynamic properties can be found by their dependency ID
         """
 
         # Get block corresponding to dep_id
         byte_offset = np.frombuffer(
             self.fwrap_metadata, dtype=self.byte_order, count=1, offset=24
         )[0]
-        handle_type2_ids = self.get_ids(dep_id, byte_offset, nbytes=4)[:, 0]
-        if handle_type2_ids.size == 0:
+        dyn_prop_type2_ids = self.get_ids(dep_id, byte_offset, nbytes=4)[:, 0]
+        if dyn_prop_type2_ids.size == 0:
             return None
 
-        handles = {}
-        for i, handle_id in enumerate(handle_type2_ids):
-            class_id, object_id = self.get_handle_class_instance(handle_id)
-            handles[f"_Handle_{i + 1}"] = self.read_object_arrays(
+        dyn_props = {}
+        for i, dyn_prop_id in enumerate(dyn_prop_type2_ids):
+            class_id, object_id = self.get_dynamic_prop_instance(dyn_prop_id)
+            dyn_props[f"__dynamic_property__{i + 1}"] = self.read_object_arrays(
                 object_id, class_id, dims=[1, 1]
             )
-        return handles
+        return dyn_props
 
     def find_object_reference(self, arr, path=()):
         """Recursively searches for object references in the data array
@@ -316,13 +314,13 @@ class SubsystemReader:
             obj_props[self.mcos_names[field_idx - 1]] = self.parse_field_types(
                 field_type, field_value, type1_id, class_name
             )
-            # Sending type1_id and class_name to parse_field
-            # for special case of function_handle_object
+            # Passing type1_id and class_name to parse_field
+            # for special case of class function_handle_object
 
-        # Include Handle Values
-        handles = self.extract_handles(dep_id)
-        if handles is not None:
-            obj_props.update(handles)
+        # Include dynamic properties
+        dyn_props = self.extract_dynamic_props(dep_id)
+        if dyn_props is not None:
+            obj_props.update(dyn_props)
         return obj_props
 
     def read_object_arrays(self, object_ids, class_id, dims):
@@ -339,9 +337,9 @@ class SubsystemReader:
         """
 
         # Attach class name to the object
-        handle_name, class_name = self.get_class_name(class_id)
-        if handle_name is not None:
-            class_name = f"{handle_name}.{class_name}"
+        namespace, class_name = self.get_class_name(class_id)
+        if namespace is not None:
+            class_name = f"{namespace}.{class_name}"
 
         if object_ids.size == 0:
             return {
@@ -391,17 +389,17 @@ class SubsystemReader:
             If raw_data is False, returns the enumeration object
         """
 
-        handle_name, class_name = self.get_class_name(
+        namespace, class_name = self.get_class_name(
             metadata[0, 0]["ClassName"].item()
         )
-        if handle_name is not None:
-            class_name = f"{handle_name}.{class_name}"
+        if namespace is not None:
+            class_name = f"{namespace}.{class_name}"
 
         builtin_class_index = metadata[0, 0]["BuiltinClassName"].item()
         if builtin_class_index != 0:
-            handle_name, builtin_class_name = self.get_class_name(builtin_class_index)
-            if handle_name is not None:
-                builtin_class_name = f"{handle_name}.{builtin_class_name}"
+            namespace, builtin_class_name = self.get_class_name(builtin_class_index)
+            if namespace is not None:
+                builtin_class_name = f"{namespace}.{builtin_class_name}"
         else:
             builtin_class_name = None
 
