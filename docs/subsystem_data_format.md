@@ -8,9 +8,9 @@
   - [Cell 1 - Linking Metadata](#cell-1---linking-metadata)
     - [Region 1: Class Identifiers](#region-1-class-identifiers)
     - [Region 3: Object Identifiers](#region-3-object-identifiers)
+    - [Region 4: Type 2 Object Property Identifiers](#region-4-type-2-object-property-identifiers)
     - [Region 2: Type 1 Object Property Identifiers](#region-2-type-1-object-property-identifiers)
-    - [Region 4: Type 2 Object Metadata](#region-4-type-2-object-metadata)
-    - [Region 5: Handle Class Metadata](#region-5-handle-class-metadata)
+    - [Region 5: Dynamic Property Metadata](#region-5-dynamic-property-metadata)
     - [Other Regions](#other-regions)
   - [Cell 2 - Padding](#cell-2---padding)
   - [Field Content Cells](#field-content-cells)
@@ -107,12 +107,10 @@ The data in this cell is stored as a `mxUINT8` data element. However, the actual
 - `type1ID` and `type2ID` are linked to different types of objects. For example, `string` is a `type1` object, whereas `datetime` is a `type2` object
 - Each `type1` and `type2` object is assigned a unique ID, in order of `objectID`, starting from one
 
-#### Region 2: Type 1 Object Property Identifiers
+#### Region 4: Type 2 Object Property Identifiers
 
-This region stores field contents for classes using the `any` property.
-
-- The start of this region is indicated by the second offset value
-- This region consists of blocks of 32-bit integers, in order of `type1_id`
+- The start of this region is indicated by the fourth offset value
+- This region consists of blocks of 32-bit integers, in order of `type2_id`
 - Each block is padded to an 8 byte boundary
 - The first block is always all zeros
 - The size of each block is determined by the first 32-bit integer.
@@ -120,19 +118,25 @@ This region stores field contents for classes using the `any` property.
 - Each sub-block is of the format `(field_name_index, field_type, field_value)`
   - The value `field_name_index` points to the field name in the list `names` obtained above
   - `field_type` indicates whether the field is a property or an attribute
-    - `field_type = 0` indicates an enumeration (speculation)
+    - `field_type = 0` indicates an enumeration member
     - `field_type = 1` indicates a property
     - `field_type = 2` indicates an attribute like `Hidden`, `Constant`, etc.
   - `field_value` depends on `field_type`
-    - If `field_type = 0`, `field_value` contains the index of the field name in linking metadata. These fields store the field name as a character array. These are probably used internally for enumerations.
+    - If `field_type = 0`, `field_value` contains the index of the field name in linking metadata. These fields store the field name as a character array. The name refers to an enumeration.
     - If `field_type = 1`, `field_value` contains the index of the cell in the cell array containing the property contents. The indexing here starts from zero. However, it should be noted that the 0th index points to Cell 3 of the cell array.
     - If `field_type = 2`, `field_value` contains the actual value itself. MATLAB internally decodes this based on the attribute type
 
-#### Region 4: Type 2 Object Metadata
+#### Region 2: Type 1 Object Property Identifiers
 
-This region is structured exactly the same as _Region 2_, but is for Type 2 objects. The start of this region is indicated by the fourth offset value.
+This region is structured exactly the same as _Region 4_, but is for Type 1 objects. The start of this region is indicated by the second offset value. Type 1 objects use a `saveobj` method that defines how the object is saved to a MAT-file. If the contents being saved does not correspond to an object of the same class, then it is indicated as a `Type 1` object.
 
-#### Region 5: Handle Class Metadata
+For example, if a class `MyClass` uses a `saveobj` method that returns a `struct`, then it is saved as a `Type 1` object. Objects of this type are stored using a property name `any`. So far, the following MATLAB datatypes have been observed to use this type:
+
+- `string`
+- `timetable`
+- `function_handle_workspace`
+
+#### Region 5: Dynamic Property Metadata
 
 This region links objects to any dynamic properties it contains (probably eventlisteners as well).
 
